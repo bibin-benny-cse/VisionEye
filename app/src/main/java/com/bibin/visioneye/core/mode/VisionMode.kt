@@ -13,10 +13,15 @@ enum class VisionMode(
     val announcement: String,
     val requiresCamera: Boolean,
     val requiresLocation: Boolean,
-    val requiresHighFrequencyAi: Boolean
+    val requiresHighFrequencyAi: Boolean,
+    val voiceCommands: List<String> = emptyList(),
+    val sampleAlerts: List<String> = emptyList(),
+    val pipelineDescription: String = ""
 ) {
     /**
      * Default mode for real-time obstacle detection, depth estimation, and path clearance.
+     * Input: Camera frames
+     * Output: Short prioritized voice alerts
      */
     NAVIGATE(
         displayName = "Navigate",
@@ -24,11 +29,16 @@ enum class VisionMode(
         announcement = "Navigate mode active. Scanning path for obstacles.",
         requiresCamera = true,
         requiresLocation = false,
-        requiresHighFrequencyAi = true
+        requiresHighFrequencyAi = true,
+        voiceCommands = listOf("Navigate", "Explore"),
+        sampleAlerts = listOf("Person ahead.", "Vehicle on your left.", "Obstacle close."),
+        pipelineDescription = "Camera frames -> Object detection + Depth estimation + Path analysis -> Short prioritized voice alerts"
     ),
 
     /**
      * Optical Character Recognition (OCR) mode for reading text, signs, and documents.
+     * Voice command: "Read"
+     * Pipeline: Camera -> OCR -> text -> Text-to-Speech
      */
     READ(
         displayName = "Read",
@@ -36,11 +46,15 @@ enum class VisionMode(
         announcement = "Read mode active. Align text within camera view.",
         requiresCamera = true,
         requiresLocation = false,
-        requiresHighFrequencyAi = false
+        requiresHighFrequencyAi = false,
+        voiceCommands = listOf("Read"),
+        pipelineDescription = "Camera -> OCR -> text -> Text-to-Speech"
     ),
 
     /**
      * Indian currency recognition mode for denomination identification.
+     * Voice command: "Currency"
+     * Pipeline: Camera -> Currency recognition model -> denomination -> Text-to-Speech
      */
     CURRENCY(
         displayName = "Currency",
@@ -48,11 +62,15 @@ enum class VisionMode(
         announcement = "Currency mode active. Hold banknote flat in front of camera.",
         requiresCamera = true,
         requiresLocation = false,
-        requiresHighFrequencyAi = false
+        requiresHighFrequencyAi = false,
+        voiceCommands = listOf("Currency"),
+        pipelineDescription = "Camera -> Currency recognition model -> denomination -> Text-to-Speech"
     ),
 
     /**
      * Facial recognition mode for identifying registered contacts and familiar faces.
+     * Voice command: "Who is this?"
+     * Pipeline: Camera -> face detection -> face embedding -> local registered-person comparison -> Text-to-Speech
      */
     PEOPLE(
         displayName = "People",
@@ -60,11 +78,16 @@ enum class VisionMode(
         announcement = "People mode active. Scanning for familiar faces.",
         requiresCamera = true,
         requiresLocation = false,
-        requiresHighFrequencyAi = true
+        requiresHighFrequencyAi = true,
+        voiceCommands = listOf("Who is this?"),
+        pipelineDescription = "Camera -> face detection -> face embedding -> local registered-person comparison -> Text-to-Speech"
     ),
 
     /**
      * Turn-by-turn pedestrian GPS navigation and outdoor wayfinding.
+     * Voice command: "Go to <destination>"
+     * Pipeline: Voice command -> destination -> route -> spoken navigation.
+     * Camera-based obstacle detection remains independent.
      */
     NAVIGATION(
         displayName = "Navigation",
@@ -72,11 +95,15 @@ enum class VisionMode(
         announcement = "Navigation mode active. Acquiring GPS location.",
         requiresCamera = false,
         requiresLocation = true,
-        requiresHighFrequencyAi = false
+        requiresHighFrequencyAi = false,
+        voiceCommands = listOf("Go to <destination>"),
+        pipelineDescription = "Voice command -> destination -> route -> spoken navigation"
     ),
 
     /**
      * Emergency assistance mode for broadcasting location and alerting emergency contacts.
+     * Triggers: Voice command, Long press
+     * Pipeline: Trigger -> current location -> emergency message -> emergency contact
      */
     SOS(
         displayName = "SOS",
@@ -84,7 +111,9 @@ enum class VisionMode(
         announcement = "Emergency SOS mode active. Alerting emergency contacts.",
         requiresCamera = false,
         requiresLocation = true,
-        requiresHighFrequencyAi = false
+        requiresHighFrequencyAi = false,
+        voiceCommands = listOf("SOS", "Emergency"),
+        pipelineDescription = "Trigger (Voice / Long press) -> current location -> emergency message -> emergency contact"
     );
 
     companion object {

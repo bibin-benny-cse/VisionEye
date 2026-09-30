@@ -15,18 +15,83 @@
 
 ---
 
-## Operational Modes (`VisionMode`)
+## Detailed Operational Specifications
 
-| Mode | Default? | Purpose | Sensors & AI Required |
+### 1. Navigate Mode (Default)
+- **Status**: Default mode on application launch.
+- **Input**: Camera frames.
+- **Primary Processing**:
+  - Real-time Object Detection
+  - Monocular/Metric Depth Estimation
+  - Optional Walkable-Path Analysis
+- **Output**: Short prioritized voice alerts.
+- **Sample Utterances**:
+  - *"Person ahead."*
+  - *"Vehicle on your left."*
+  - *"Obstacle close."*
+
+---
+
+### 2. Read Mode
+- **Voice Command**: `"Read"`
+- **Pipeline**:
+  $$\text{Camera} \longrightarrow \text{OCR} \longrightarrow \text{Text Extraction} \longrightarrow \text{Text-to-Speech (TTS)}$$
+- **Behavior**: Single-snapshot or low-frame-rate capture. Aligns and recognizes printed documents, storefront signs, and labels.
+
+---
+
+### 3. Currency Mode
+- **Voice Command**: `"Currency"`
+- **Pipeline**:
+  $$\text{Camera} \longrightarrow \text{Currency Recognition Model} \longrightarrow \text{Denomination} \longrightarrow \text{Text-to-Speech (TTS)}$$
+- **Behavior**: Optimized on-device classification for Indian Rupee (INR) banknotes (₹10, ₹20, ₹50, ₹100, ₹200, ₹500).
+
+---
+
+### 4. People Mode
+- **Voice Command**: `"Who is this?"`
+- **Pipeline**:
+  $$\text{Camera} \longrightarrow \text{Face Detection} \longrightarrow \text{Face Embedding} \longrightarrow \text{Local Registered Comparison} \longrightarrow \text{Text-to-Speech (TTS)}$$
+- **Behavior**: Local on-device vector comparison against registered family/friend face profiles.
+
+---
+
+### 5. Navigation Mode
+- **Voice Command**: `"Go to <destination>"`
+- **Pipeline**:
+  $$\text{Voice Command} \longrightarrow \text{Destination Resolution} \longrightarrow \text{Route Guidance} \longrightarrow \text{Spoken Navigation}$$
+- **Independence Principle**: Camera-based obstacle detection remains independent and active in parallel when safety demands.
+
+---
+
+### 6. SOS Mode
+- **Triggers**:
+  - Voice command (*"SOS"* / *"Emergency"*)
+  - Long press on screen / physical button
+- **Pipeline**:
+  $$\text{Trigger} \longrightarrow \text{Current GPS Location} \longrightarrow \text{Emergency Message} \longrightarrow \text{Emergency Contact Alerting}$$
+- **Behavior**: Initiates immediate visual/auditory countdown with quick cancel option, followed by automated SMS and contact dialing.
+
+---
+
+### 7. Decision Engine & Alert Prioritization
+
+The **Decision Engine** (`fusion/decision/DecisionEngine.kt`) arbitrates sensory information, resolves conflicts between simultaneous events, and determines the voice delivery schedule.
+
+#### Priority Hierarchy (Strict Order)
+$$\textbf{Collision Warning} > \textbf{Immediate Obstacle} > \textbf{Navigation Instruction} > \textbf{General Object Information}$$
+
+| Priority Level | Rank | Typical Event | Example Alert |
 | :--- | :---: | :--- | :--- |
-| **`NAVIGATE`** | **Yes** | Real-time obstacle detection, depth estimation, path clearance | Camera feed, Depth/Obstacle AI model, Sensor fusion |
-| **`READ`** | No | Optical Character Recognition (OCR) for signs, text, and documents | Camera (snapshot/low-fps), Text recognition (OCR) |
-| **`CURRENCY`** | No | Indian banknote denomination recognition | Camera (snapshot/on-demand), Currency classification model |
-| **`PEOPLE`** | No | Familiar and registered face recognition | Camera feed, Face detection & feature matching model |
-| **`NAVIGATION`** | No | Pedestrian outdoor wayfinding and turn-by-turn guidance | GPS, Fused Location Provider, Compass / IMU |
-| **`SOS`** | No | Emergency assistance alert, location broadcast, and contact dialing | Cellular / SMS, GPS location |
+| **`COLLISION_WARNING`** | 4 | Imminent collision or fast-approaching vehicle | *"Stop! Vehicle approaching on left."* |
+| **`IMMEDIATE_OBSTACLE`** | 3 | Direct obstruction in walking path | *"Obstacle close."*, *"Person ahead."* |
+| **`NAVIGATION_INSTRUCTION`**| 2 | Route guidance instruction | *"In 20 meters, turn right."* |
+| **`GENERAL_OBJECT_INFO`** | 1 | Background or non-urgent object description | *"Bench on right."* |
 
-`VisionMode.NAVIGATE` is the default startup mode.
+#### Cooldown & Suppression Logic
+- **Repetition Suppression**: Identical or duplicate alerts (keyed by semantic tag) are suppressed within a configurable cooldown period (`cooldownPeriodMs`, default: 3–4 seconds).
+- **Preemption**: Higher-priority alerts immediately preempt lower-priority speech.
+- **Safety Bypass**: `COLLISION_WARNING` events bypass standard cooldown to ensure immediate user protection.
 
 ---
 
@@ -40,7 +105,7 @@ app/src/main/java/com/bibin/visioneye/
 │
 ├── core/                                 # Foundational abstractions and mode state
 │   ├── mode/
-│   │   ├── VisionMode.kt                 # Enum containing all 6 modes and metadata flags
+│   │   ├── VisionMode.kt                 # Enum containing all 6 modes, voice triggers, & pipelines
 │   │   └── ModeManager.kt                # ModeManager interface & DefaultModeManager (StateFlow + listeners)
 │   └── contract/
 │       └── ModeAwareComponent.kt         # Contract enforcing mode-based activation/deactivation
@@ -61,8 +126,10 @@ app/src/main/java/com/bibin/visioneye/
 ├── ai/                                   # Machine learning inference pipelines
 │   └── AiModelManager.kt                 # Mode-aware model coordinator; unloads inactive models
 │
-├── fusion/                               # Multi-sensor fusion
-│   └── SensorFusionCoordinator.kt        # Combines visual, depth, and motion data into PerceptionEvents
+├── fusion/                               # Multi-sensor fusion & arbitration
+│   ├── SensorFusionCoordinator.kt        # Combines visual, depth, and motion data into PerceptionEvents
+│   └── decision/
+│       └── DecisionEngine.kt             # Alert prioritization engine and repetition cooldown tracker
 │
 ├── speech/                               # Audio & Voice feedback
 │   └── SpeechController.kt               # Text-to-Speech (TTS) priority queue and mode announcements
@@ -124,6 +191,6 @@ gradlew.bat test assembleDebug
 
 ## Conventions for Future Changes
 1. **No Continuous Execution**: Never start a camera analysis loop or neural network forward pass that runs independently of the active `VisionMode`.
-2. **Minimal Dependencies**: Keep dependencies focused. Do not import heavy frameworks unless strictly required for a sub-pipeline.
-3. **Preserve Generated Android Files**: Do not overwrite Gradle wrappers or SDK configurations unnecessarily.
+2. **Alert Prioritization**: All audio announcements must pass through the `DecisionEngine` to ensure safety alerts preempt informational messages and prevent alert fatigue.
+3. **Minimal Dependencies**: Keep dependencies focused. Do not import heavy frameworks unless strictly required for a sub-pipeline.
 4. **Always Test Before Committing**: Run `gradlew.bat test assembleDebug` and verify `BUILD SUCCESSFUL` before reporting task completion.
