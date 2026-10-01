@@ -1,17 +1,53 @@
 # VisionEye — Agent & Developer Guide
 
-## Project Overview
-**VisionEye** is an Android smartphone application designed to provide real-time AI assistance for visually impaired users. It uses on-device computer vision, sensor fusion, spatial awareness, and audio feedback to enhance user mobility, independence, and safety.
+## Project Purpose
+**VisionEye** is a smartphone-based AI assistance system for visually impaired users. It uses on-device computer vision, sensor fusion, spatial awareness, and audio feedback to enhance user mobility, independence, and environmental perception.
 
 ---
 
-## Non-Negotiable Architectural Principles
+## Primary Architecture
 
-### 1. Mode-Based Model Execution
-> **CRITICAL RULE**: Do **NOT** run all AI models continuously.
-- Running simultaneous object detection, depth estimation, OCR, and facial recognition leads to severe thermal throttling, frame drops, and battery exhaustion.
-- The application follows a strict **mode-based architecture** managed by `ModeManager`.
-- Subsystems implement `ModeAwareComponent` and **must activate only when the active `VisionMode` demands their specific workload**. When a mode is exited, corresponding sensor captures and AI model workers must be paused or unloaded.
+The system uses a strict **mode-based architecture**.
+
+### Default Mode
+- **`NAVIGATE`** (active upon application startup)
+
+### Available Modes
+1. **`NAVIGATE`** — Object detection, depth estimation, and optional walkable-path analysis
+2. **`READ`** — Optical Character Recognition (OCR) for text and documents
+3. **`CURRENCY`** — Indian banknote denomination recognition
+4. **`PEOPLE`** — Registered face recognition
+5. **`NAVIGATION`** — Turn-by-turn pedestrian GPS navigation
+6. **`SOS`** — Emergency assistance and location dispatch
+
+---
+
+## Development Principles
+
+Developers and AI agents working on VisionEye must adhere to the following principles:
+
+1. **Language & UI**: Use **Kotlin** for application logic and **Jetpack Compose** (Material3) for all UI components.
+2. **Separation of Concerns**: Keep camera acquisition and processing strictly separate from the UI layer.
+3. **Interface Abstraction**: Keep all AI models and hardware services behind clean interfaces (e.g., `AiModelManager`, `CameraController`).
+4. **No Continuous Model Execution**: Do **not** run every AI model continuously. Only the pipeline required by the active `VisionMode` may be scheduled or active.
+5. **Threading & Performance**: Heavy inference and compute-intensive sensor processing must **never** run on the UI thread. Always offload to background coroutine dispatchers (e.g., `Dispatchers.Default` or custom background executors).
+6. **On-Device Inference**: Prefer on-device processing (e.g., TensorFlow Lite, ONNX Runtime, MediaPipe) where practical to maintain privacy, zero-latency feedback, and offline availability.
+7. **Module Independence**: Keep subsystems modular and decoupled. Subsystems communicate via state streams (`StateFlow`/`SharedFlow`), contracts (`ModeAwareComponent`), and the central `DecisionEngine`.
+8. **Minimal Dependencies**: Avoid introducing unnecessary third-party libraries or bloated frameworks.
+9. **Physical Device Validation**: Test every feature on a physical Android device whenever possible to account for real-world thermals, camera sensors, and haptics.
+10. **Build Discipline**: Always build the project after significant changes (`gradlew.bat test assembleDebug`).
+11. **Honest Testing**: Never claim functionality works without comprehensive testing and automated verification.
+
+---
+
+## Safety & Ethics
+
+> [!WARNING]
+> **Safety Critical Boundary**: VisionEye is an **assistive prototype**. It is **not** a replacement for a white cane or a guide dog, and must **never** be described or marketed as a guaranteed safety or collision-prevention system.
+
+- **Non-Replacement Rule**: All documentation, UI banners, and user-facing announcements must emphasize that VisionEye is a secondary assistive tool to complement traditional mobility aids (such as the white cane).
+- **Consent During Enrollment**: Facial recognition (`PEOPLE` mode) must strictly require explicit, informed consent before any individual's face is enrolled or embedded.
+- **Local Biometric Storage**: All facial embeddings, biometric vectors, and personal contact information must be stored locally on the user's device and must not be transmitted to third-party cloud servers without explicit authorization.
 
 ---
 
@@ -52,7 +88,7 @@
 - **Voice Command**: `"Who is this?"`
 - **Pipeline**:
   $$\text{Camera} \longrightarrow \text{Face Detection} \longrightarrow \text{Face Embedding} \longrightarrow \text{Local Registered Comparison} \longrightarrow \text{Text-to-Speech (TTS)}$$
-- **Behavior**: Local on-device vector comparison against registered family/friend face profiles.
+- **Behavior**: Local on-device vector comparison against registered profiles with mandatory enrollment consent.
 
 ---
 
@@ -186,11 +222,3 @@ gradlew.bat test
 :: Run both tests and assembly
 gradlew.bat test assembleDebug
 ```
-
----
-
-## Conventions for Future Changes
-1. **No Continuous Execution**: Never start a camera analysis loop or neural network forward pass that runs independently of the active `VisionMode`.
-2. **Alert Prioritization**: All audio announcements must pass through the `DecisionEngine` to ensure safety alerts preempt informational messages and prevent alert fatigue.
-3. **Minimal Dependencies**: Keep dependencies focused. Do not import heavy frameworks unless strictly required for a sub-pipeline.
-4. **Always Test Before Committing**: Run `gradlew.bat test assembleDebug` and verify `BUILD SUCCESSFUL` before reporting task completion.

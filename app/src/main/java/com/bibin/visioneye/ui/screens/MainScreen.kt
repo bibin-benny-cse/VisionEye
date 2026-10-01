@@ -99,6 +99,9 @@ fun MainScreen(
             // Architecture Mode Rule Card
             ArchitectureRuleCard(currentMode = currentMode)
 
+            // Safety Prototype Notice
+            SafetyNoticeCard()
+
             // Mode Selector Heading
             Text(
                 text = "SELECT OPERATIONAL MODE",
@@ -299,6 +302,43 @@ private fun ModeSelectionButton(
                     style = MaterialTheme.typography.labelLarge,
                     color = HighContrastBlack,
                     fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SafetyNoticeCard(
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = HighContrastCard),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, HighContrastYellow)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "⚠️",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "Safety Notice (Prototype)",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = HighContrastYellow
+                )
+                Text(
+                    text = "VisionEye is an assistive prototype and NOT a replacement for a white cane. It is not a guaranteed safety system.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = HighContrastWhite
                 )
             }
         }
