@@ -11,9 +11,13 @@ class MainActivity : ComponentActivity() {
 
         val app = application as VisionEyeApplication
         val modeManager = app.modeManager
+        val cameraController = app.cameraController
 
         setContent {
-            VisionEyeApp(modeManager = modeManager)
+            VisionEyeApp(
+                modeManager = modeManager,
+                cameraController = cameraController
+            )
         }
     }
 }

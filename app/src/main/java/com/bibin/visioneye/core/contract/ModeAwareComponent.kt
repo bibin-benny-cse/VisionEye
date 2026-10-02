@@ -1,5 +1,6 @@
 package com.bibin.visioneye.core.contract
 
+import com.bibin.visioneye.core.mode.ModeChangeListener
 import com.bibin.visioneye.core.mode.VisionMode
 
 /**
@@ -13,7 +14,7 @@ import com.bibin.visioneye.core.mode.VisionMode
  * or coordinates with this contract to sleep/pause when its associated
  * mode is inactive.
  */
-interface ModeAwareComponent {
+interface ModeAwareComponent : ModeChangeListener {
     /**
      * The set of [VisionMode]s in which this component must be active.
      */
@@ -31,5 +32,5 @@ interface ModeAwareComponent {
      * @param newMode The newly active mode.
      * @param previousMode The mode that was exited.
      */
-    fun onModeChanged(newMode: VisionMode, previousMode: VisionMode)
+    override fun onModeChanged(newMode: VisionMode, previousMode: VisionMode)
 }

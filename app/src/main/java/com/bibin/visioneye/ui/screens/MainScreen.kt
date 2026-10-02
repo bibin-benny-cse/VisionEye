@@ -56,6 +56,7 @@ import com.bibin.visioneye.ui.theme.ReadGreen
 fun MainScreen(
     currentMode: VisionMode,
     onModeSelected: (VisionMode) -> Unit,
+    onStartCamera: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -94,7 +95,10 @@ fun MainScreen(
             Spacer(modifier = Modifier.height(4.dp))
 
             // Active Mode Banner
-            ActiveModeBanner(mode = currentMode)
+            ActiveModeBanner(
+                mode = currentMode,
+                onStartCamera = onStartCamera
+            )
 
             // Architecture Mode Rule Card
             ArchitectureRuleCard(currentMode = currentMode)
@@ -118,7 +122,13 @@ fun MainScreen(
                 ModeSelectionButton(
                     mode = mode,
                     isSelected = mode == currentMode,
-                    onClick = { onModeSelected(mode) }
+                    onClick = {
+                        if (mode == currentMode && mode == VisionMode.NAVIGATE) {
+                            onStartCamera()
+                        } else {
+                            onModeSelected(mode)
+                        }
+                    }
                 )
             }
 
@@ -130,6 +140,7 @@ fun MainScreen(
 @Composable
 private fun ActiveModeBanner(
     mode: VisionMode,
+    onStartCamera: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val accentColor = getModeAccentColor(mode)
@@ -146,7 +157,7 @@ private fun ActiveModeBanner(
                 .fillMaxWidth()
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
                 text = "ACTIVE MODE",
@@ -169,7 +180,38 @@ private fun ActiveModeBanner(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            // When in NAVIGATE mode (or camera modes), provide direct access to the live camera scanner
+            if (mode == VisionMode.NAVIGATE) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(58.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(NavigateBlue)
+                        .border(2.dp, HighContrastWhite, RoundedCornerShape(12.dp))
+                        .clickable(onClick = onStartCamera)
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = "Open live camera assistance. Double tap to start rear camera scanning."
+                        }
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(text = "📷", fontSize = 22.sp)
+                        Text(
+                            text = "START CAMERA ASSISTANCE",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = HighContrastWhite,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+            }
 
             Box(
                 modifier = Modifier

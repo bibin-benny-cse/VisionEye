@@ -1,37 +1,11 @@
 package com.bibin.visioneye.fusion.decision
 
-/**
- * Priority levels for the VisionEye Decision Engine.
- *
- * Strict prioritization order:
- * COLLISION_WARNING > IMMEDIATE_OBSTACLE > NAVIGATION_INSTRUCTION > GENERAL_OBJECT_INFO
- */
-enum class AlertPriority(val rank: Int) {
-    /**
-     * General spatial and ambient visual feedback (e.g. "Bench on right", "Doorway open").
-     */
-    GENERAL_OBJECT_INFO(1),
-
-    /**
-     * Pedestrian navigation guidance (e.g. "In 20 meters, turn right on Main Street").
-     */
-    NAVIGATION_INSTRUCTION(2),
-
-    /**
-     * Urgent obstacles in the direct walkable path (e.g. "Person ahead", "Obstacle close").
-     */
-    IMMEDIATE_OBSTACLE(3),
-
-    /**
-     * Critical imminent danger requiring immediate user halt (e.g. "Stop. Vehicle approaching").
-     */
-    COLLISION_WARNING(4)
-}
+import com.bibin.visioneye.ai.Detection
 
 /**
- * Discrete alert candidate dispatched to the Decision Engine.
+ * Discrete alert candidate dispatched to the Decision Engine (legacy format).
  *
- * @param key Unique semantic identifier for cooldown suppression (e.g., "obstacle_person_ahead").
+ * @param key Unique semantic identifier for cooldown suppression.
  * @param spokenText Short, concise speech utterance to be vocalized to the user.
  * @param priority Relative urgency rank used to arbitrate speech queueing.
  * @param timestampMs Creation epoch timestamp in milliseconds.
@@ -44,42 +18,158 @@ data class AlertItem(
 )
 
 /**
- * Contract for the VisionEye Decision Engine.
+ * Result of an analysis cycle processed by the [DecisionEngine].
  *
- * Arbitrates multi-modal alerts, prioritizes safety-critical events,
- * and suppresses repeated redundant announcements using cooldown logic.
+ * @property selectedAlerts Prioritized, unsuppressed alert candidates (at most [DecisionConfig.maxSelectedAlerts]).
+ * @property suppressedCount Number of detections filtered out by cooldown or capacity limit.
+ * @property totalCandidateCount Total number of detections evaluated above confidence threshold.
+ * @property timestampMs Epoch timestamp of the decision cycle.
+ */
+data class DecisionResult(
+    val selectedAlerts: List<AlertCandidate> = emptyList(),
+    val suppressedCount: Int = 0,
+    val totalCandidateCount: Int = 0,
+    val timestampMs: Long = System.currentTimeMillis()
+)
+
+/**
+ * Contract for the VisionEye Context-Aware Decision Engine.
+ *
+ * Arbitrates raw object detections, applies rule-based class priorities,
+ * enforces temporal repeat suppression cooldowns, and generates concise
+ * position-aware contextual alert candidates.
  */
 interface DecisionEngine {
     /**
-     * Processes an incoming [AlertItem].
+     * Active configuration governing thresholds, cooldowns, and class priorities.
+     */
+    val config: DecisionConfig
+
+    /**
+     * Transforms raw YOLO detections into a small set of prioritized [DecisionResult] candidates.
      *
-     * @param alert The candidate alert item.
-     * @return True if the alert should be spoken, false if suppressed by cooldown or lower priority.
+     * @param detections List of current object detections from the vision pipeline.
+     * @param timestampMs Optional evaluation epoch timestamp (defaults to current time).
+     * @return [DecisionResult] containing selected candidates and suppression metrics.
+     */
+    fun process(
+        detections: List<Detection>,
+        timestampMs: Long = System.currentTimeMillis()
+    ): DecisionResult
+
+    /**
+     * Legacy evaluation for discrete [AlertItem]s.
      */
     fun shouldEmitAlert(alert: AlertItem): Boolean
 
     /**
-     * Configurable cooldown window in milliseconds (default: 4000ms).
+     * Configurable cooldown window in milliseconds.
      */
     var cooldownPeriodMs: Long
 
     /**
-     * Clears cached cooldown timestamps.
+     * Clears all recorded cooldown timestamps.
      */
     fun resetCooldowns()
 }
 
 /**
- * Default implementation of [DecisionEngine] with thread-safe cooldown tracking.
+ * Concrete implementation of [DecisionEngine] with deterministic arbitration
+ * and thread-safe temporal cooldown tracking.
  */
 class DefaultDecisionEngine(
-    override var cooldownPeriodMs: Long = 4000L
+    override val config: DecisionConfig = DecisionConfig()
 ) : DecisionEngine {
 
-    private val lastAlertTimestamps = mutableMapOf<String, Long>()
+    // Secondary constructor for backward compatibility with existing tests
+    constructor(cooldownPeriodMs: Long) : this(
+        config = DecisionConfig(cooldownPeriodMs = cooldownPeriodMs)
+    )
 
-    @Synchronized
-    override fun shouldEmitAlert(alert: AlertItem): Boolean {
+    private var _overrideCooldownPeriodMs: Long? = null
+
+    override var cooldownPeriodMs: Long
+        get() = _overrideCooldownPeriodMs ?: config.cooldownPeriodMs
+        set(value) {
+            _overrideCooldownPeriodMs = value
+        }
+
+    private val lastAlertTimestamps = mutableMapOf<String, Long>()
+    private val lock = Any()
+
+    override fun process(
+        detections: List<Detection>,
+        timestampMs: Long
+    ): DecisionResult = synchronized(lock) {
+        if (detections.isEmpty()) {
+            return DecisionResult(emptyList(), 0, 0, timestampMs)
+        }
+
+        val activeCooldown = cooldownPeriodMs
+
+        // 1. Confidence filter (alertConfidenceThreshold)
+        val validDetections = detections.filter { it.confidence >= config.alertConfidenceThreshold }
+
+        // 2. Map detections to AlertCandidate with position-aware message and priority
+        val candidates = validDetections.map { det ->
+            val priority = config.getPriorityForClass(det.className)
+            val priorityRank = config.getPriorityRank(det.className)
+            val message = AlertMessageFormatter.format(det.className, det.position)
+
+            AlertCandidate(
+                className = det.className,
+                confidence = det.confidence,
+                position = det.position,
+                priority = priority,
+                priorityRank = priorityRank,
+                message = message,
+                timestampMs = timestampMs
+            )
+        }
+
+        // 3. Deterministic ordering:
+        // Priority rank descending -> Confidence descending -> Position ordinal -> Class name
+        val sortedCandidates = candidates.sortedWith(
+            compareByDescending<AlertCandidate> { it.priorityRank }
+                .thenByDescending { it.confidence }
+                .thenBy { it.position.ordinal }
+                .thenBy { it.className }
+        )
+
+        // 4. Temporal cooldown suppression and maxSelectedAlerts cap
+        val selected = mutableListOf<AlertCandidate>()
+        var suppressed = 0
+        val seenInCurrentCycle = mutableSetOf<String>()
+
+        for (candidate in sortedCandidates) {
+            val key = candidate.deduplicationKey
+            val lastEmitted = lastAlertTimestamps[key]
+            val isWithinCooldown = lastEmitted != null && (timestampMs - lastEmitted) < activeCooldown
+            val isDuplicateInSameCycle = seenInCurrentCycle.contains(key)
+
+            if (isWithinCooldown || isDuplicateInSameCycle) {
+                suppressed++
+                continue
+            }
+
+            if (selected.size < config.maxSelectedAlerts) {
+                selected.add(candidate)
+                seenInCurrentCycle.add(key)
+                lastAlertTimestamps[key] = timestampMs
+            } else {
+                suppressed++
+            }
+        }
+
+        DecisionResult(
+            selectedAlerts = selected,
+            suppressedCount = suppressed,
+            totalCandidateCount = validDetections.size,
+            timestampMs = timestampMs
+        )
+    }
+
+    override fun shouldEmitAlert(alert: AlertItem): Boolean = synchronized(lock) {
         val now = alert.timestampMs
         val lastEmitted = lastAlertTimestamps[alert.key]
 
@@ -101,8 +191,7 @@ class DefaultDecisionEngine(
         return true
     }
 
-    @Synchronized
-    override fun resetCooldowns() {
+    override fun resetCooldowns() = synchronized(lock) {
         lastAlertTimestamps.clear()
     }
 }
