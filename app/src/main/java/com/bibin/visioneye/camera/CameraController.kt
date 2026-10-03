@@ -48,6 +48,20 @@ interface CameraController : ModeAwareComponent {
         get() = null
 
     /**
+     * Observable stream of READ mode state.
+     */
+    val readState: StateFlow<com.bibin.visioneye.read.ReadState>
+        get() = kotlinx.coroutines.flow.MutableStateFlow(com.bibin.visioneye.read.ReadState.Searching)
+
+    /**
+     * Triggers high-resolution capture via CameraX ImageCapture.
+     */
+    fun captureImage(
+        onSuccess: (android.graphics.Bitmap) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {}
+
+    /**
      * True if CAMERA runtime permission is currently granted.
      */
     val hasPermission: Boolean

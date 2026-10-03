@@ -4,9 +4,14 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.UseCase
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -17,6 +22,8 @@ import com.bibin.visioneye.ai.YoloDebugState
 import com.bibin.visioneye.ai.YoloFrameAnalyzer
 import com.bibin.visioneye.ai.YoloV8Detector
 import com.bibin.visioneye.core.mode.VisionMode
+import com.bibin.visioneye.read.ReadCoordinator
+import com.bibin.visioneye.read.ReadState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +40,8 @@ import java.util.concurrent.Executors
  * - Dedicated background thread for [ImageAnalysis]
  * - Frame throttling (~5 FPS) via [FrameScheduler] to prevent accumulating delayed work
  * - Pluggable [ObjectDetector] integration (active only in [VisionMode.NAVIGATE])
+ * - On-device English text reading pipeline via [ReadCoordinator] (active in [VisionMode.READ])
+ * - High-resolution capture via [ImageCapture] for READ mode OCR
  * - Clean unbinding and resource cleanup on mode change or user exit
  */
 class CameraManager(
@@ -60,6 +69,9 @@ class CameraManager(
     val yoloAnalyzer = YoloFrameAnalyzer(objectDetector, speechController = speechController)
     override val yoloState: StateFlow<YoloDebugState> = yoloAnalyzer.yoloState
 
+    val readCoordinator = ReadCoordinator(speechController = speechController)
+    override val readState: StateFlow<ReadState> = readCoordinator.readState
+
     private var currentActiveMode: VisionMode = VisionMode.NAVIGATE
 
     private var cameraProvider: ProcessCameraProvider? = null
@@ -67,6 +79,13 @@ class CameraManager(
     private var currentLifecycleOwner: LifecycleOwner? = null
     private var currentSurfaceProvider: Preview.SurfaceProvider? = null
     private var imageAnalysis: ImageAnalysis? = null
+    private var imageCapture: ImageCapture? = null
+
+    init {
+        readCoordinator.captureProvider = { onSuccess, onError ->
+            captureImage(onSuccess, onError)
+        }
+    }
 
     override val hasPermission: Boolean
         get() = checkCameraPermission()
@@ -141,11 +160,21 @@ class CameraManager(
                 imageAnalysis = analysisUseCase
                 useCases.add(analysisUseCase)
 
-                // Attach YOLO frame analyzer only if in NAVIGATE mode
-                if (currentActiveMode == VisionMode.NAVIGATE) {
-                    setFrameAnalyzer(yoloAnalyzer)
-                } else {
-                    clearFrameAnalyzer()
+                // 3. ImageCapture Use Case (High-resolution capture for READ mode)
+                val captureUseCase = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .build()
+                imageCapture = captureUseCase
+                useCases.add(captureUseCase)
+
+                // Attach active frame analyzer based on mode
+                when (currentActiveMode) {
+                    VisionMode.NAVIGATE -> setFrameAnalyzer(yoloAnalyzer)
+                    VisionMode.READ -> {
+                        readCoordinator.activate()
+                        setFrameAnalyzer(readCoordinator.frameAnalyzer)
+                    }
+                    else -> clearFrameAnalyzer()
                 }
 
                 // Bind to Lifecycle with rear-facing camera selector
@@ -156,7 +185,7 @@ class CameraManager(
                 )
 
                 _state.value = CameraState.Streaming
-                Log.d(TAG, "Camera bound successfully to lifecycle with rear camera & 5 FPS ImageAnalysis.")
+                Log.d(TAG, "Camera bound successfully to lifecycle with rear camera, 5 FPS ImageAnalysis & ImageCapture.")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to bind CameraX use cases", e)
                 _state.value = CameraState.Error(
@@ -171,9 +200,11 @@ class CameraManager(
         try {
             clearFrameAnalyzer()
             yoloAnalyzer.reset()
+            readCoordinator.deactivate()
 
             imageAnalysis?.clearAnalyzer()
             imageAnalysis = null
+            imageCapture = null
             cameraProvider?.unbindAll()
             camera = null
             currentSurfaceProvider = null
@@ -206,9 +237,11 @@ class CameraManager(
         try {
             clearFrameAnalyzer()
             yoloAnalyzer.reset()
+            readCoordinator.deactivate()
 
             imageAnalysis?.clearAnalyzer()
             imageAnalysis = null
+            imageCapture = null
             cameraProvider?.unbindAll()
             camera = null
             frameScheduler.reset()
@@ -241,13 +274,61 @@ class CameraManager(
         frameScheduler.targetFps = fps
     }
 
+    override fun captureImage(
+        onSuccess: (Bitmap) -> Unit,
+        onError: (Throwable) -> Unit
+    ) {
+        val capture = imageCapture
+        if (capture == null) {
+            onError(IllegalStateException("ImageCapture is not bound or initialized"))
+            return
+        }
+
+        capture.takePicture(
+            analysisExecutor,
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(imageProxy: ImageProxy) {
+                    try {
+                        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                        val bitmap = imageProxy.toBitmap()
+                        val uprightBitmap = if (rotationDegrees != 0) {
+                            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                        } else {
+                            bitmap
+                        }
+                        onSuccess(uprightBitmap)
+                    } catch (t: Throwable) {
+                        onError(t)
+                    } finally {
+                        imageProxy.close()
+                    }
+                }
+
+                override fun onError(exception: ImageCaptureException) {
+                    onError(exception)
+                }
+            }
+        )
+    }
+
     override fun onModeChanged(newMode: VisionMode, previousMode: VisionMode) {
         currentActiveMode = newMode
-        if (newMode == VisionMode.NAVIGATE) {
-            setFrameAnalyzer(yoloAnalyzer)
-        } else {
-            clearFrameAnalyzer()
-            yoloAnalyzer.reset()
+        when (newMode) {
+            VisionMode.NAVIGATE -> {
+                readCoordinator.deactivate()
+                setFrameAnalyzer(yoloAnalyzer)
+            }
+            VisionMode.READ -> {
+                yoloAnalyzer.reset()
+                readCoordinator.activate()
+                setFrameAnalyzer(readCoordinator.frameAnalyzer)
+            }
+            else -> {
+                clearFrameAnalyzer()
+                yoloAnalyzer.reset()
+                readCoordinator.deactivate()
+            }
         }
 
         if (!isEnabledFor(newMode)) {
@@ -262,6 +343,7 @@ class CameraManager(
     fun release() {
         stopCamera()
         objectDetector.close()
+        readCoordinator.release()
         if (!analysisExecutor.isShutdown) {
             analysisExecutor.shutdown()
         }

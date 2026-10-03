@@ -70,6 +70,9 @@ dependencies {
     // TensorFlow Lite (On-device ML inference for YOLOv8n)
     implementation(libs.tensorflow.lite)
 
+    // Google ML Kit Text Recognition (On-device Latin OCR for READ mode)
+    implementation(libs.mlkit.text.recognition)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

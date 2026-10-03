@@ -71,6 +71,10 @@ class CameraControllerTest {
         // Switch back to NAVIGATE (camera supported, so stopCamera shouldn't be called)
         controller.onModeChanged(VisionMode.NAVIGATE, VisionMode.SOS)
         assertEquals(2, controller.stopCount)
+
+        // Switch to READ (camera supported, so stopCamera shouldn't be called)
+        controller.onModeChanged(VisionMode.READ, VisionMode.NAVIGATE)
+        assertEquals(2, controller.stopCount)
     }
 
     @Test

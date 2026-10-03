@@ -57,6 +57,7 @@ fun MainScreen(
     currentMode: VisionMode,
     onModeSelected: (VisionMode) -> Unit,
     onStartCamera: () -> Unit = {},
+    onStartReadMode: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -94,10 +95,110 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(4.dp))
 
+            // Primary Assistance Actions (Prominent Direct Entry Points)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(2.dp, HighContrastYellow, RoundedCornerShape(16.dp)),
+                colors = CardDefaults.cardColors(containerColor = HighContrastSurface),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "PRIMARY ASSISTANCE",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = HighContrastYellow,
+                        letterSpacing = 1.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // 1. Start Navigation Camera Button
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(NavigateBlue)
+                            .border(2.dp, HighContrastWhite, RoundedCornerShape(12.dp))
+                            .clickable(onClick = onStartCamera)
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "Start Navigation Assistance. Opens camera to detect obstacles and guide walking path. Double tap to activate."
+                            }
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Text(text = "🚶", fontSize = 26.sp)
+                            Column {
+                                Text(
+                                    text = "START NAVIGATION",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = HighContrastWhite,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = "Live obstacle detection & alerts",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = HighContrastWhite.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
+                    }
+
+                    // 2. Read Text Button (Direct entry to READ Mode)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(ReadGreen)
+                            .border(2.dp, HighContrastWhite, RoundedCornerShape(12.dp))
+                            .clickable(onClick = onStartReadMode)
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "Read Text. Opens camera to scan English pages, documents, and signs and read them aloud. Double tap to activate."
+                            }
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Text(text = "📖", fontSize = 26.sp)
+                            Column {
+                                Text(
+                                    text = "READ TEXT",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = HighContrastBlack,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = "Scan English document & speak aloud",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = HighContrastBlack.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Active Mode Banner
             ActiveModeBanner(
                 mode = currentMode,
-                onStartCamera = onStartCamera
+                onStartCamera = onStartCamera,
+                onStartReadMode = onStartReadMode
             )
 
             // Architecture Mode Rule Card
@@ -123,8 +224,14 @@ fun MainScreen(
                     mode = mode,
                     isSelected = mode == currentMode,
                     onClick = {
-                        if (mode == currentMode && mode == VisionMode.NAVIGATE) {
-                            onStartCamera()
+                        if (mode == VisionMode.READ) {
+                            onStartReadMode()
+                        } else if (mode == VisionMode.NAVIGATE) {
+                            if (mode == currentMode) {
+                                onStartCamera()
+                            } else {
+                                onModeSelected(mode)
+                            }
                         } else {
                             onModeSelected(mode)
                         }
@@ -141,6 +248,7 @@ fun MainScreen(
 private fun ActiveModeBanner(
     mode: VisionMode,
     onStartCamera: () -> Unit,
+    onStartReadMode: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accentColor = getModeAccentColor(mode)
@@ -180,7 +288,7 @@ private fun ActiveModeBanner(
                 textAlign = TextAlign.Center
             )
 
-            // When in NAVIGATE mode (or camera modes), provide direct access to the live camera scanner
+            // Direct camera assistance button when in NAVIGATE mode
             if (mode == VisionMode.NAVIGATE) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Box(
@@ -193,7 +301,7 @@ private fun ActiveModeBanner(
                         .clickable(onClick = onStartCamera)
                         .semantics {
                             role = Role.Button
-                            contentDescription = "Open live camera assistance. Double tap to start rear camera scanning."
+                            contentDescription = "Open live navigation camera assistance. Double tap to start rear camera scanning."
                         }
                         .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center
@@ -207,6 +315,39 @@ private fun ActiveModeBanner(
                             text = "START CAMERA ASSISTANCE",
                             style = MaterialTheme.typography.titleMedium,
                             color = HighContrastWhite,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+            }
+
+            // Direct camera reading button when in READ mode
+            if (mode == VisionMode.READ) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(58.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(ReadGreen)
+                        .border(2.dp, HighContrastWhite, RoundedCornerShape(12.dp))
+                        .clickable(onClick = onStartReadMode)
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = "Start reading. Opens camera to scan English text and read aloud. Double tap to start."
+                        }
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(text = "📖", fontSize = 22.sp)
+                        Text(
+                            text = "START READING (CAMERA)",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = HighContrastBlack,
                             fontWeight = FontWeight.ExtraBold
                         )
                     }
