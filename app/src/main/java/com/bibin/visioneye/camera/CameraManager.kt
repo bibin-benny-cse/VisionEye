@@ -39,6 +39,7 @@ class CameraManager(
     private val context: Context,
     targetAnalysisFps: Double = 5.0,
     val objectDetector: ObjectDetector = YoloV8Detector(context),
+    override val speechController: com.bibin.visioneye.speech.SpeechController? = null,
     private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "VisionEye-FrameAnalyzer").apply {
             priority = Thread.NORM_PRIORITY - 1
@@ -56,7 +57,7 @@ class CameraManager(
 
     override val diagnostics: StateFlow<FrameAnalysisDiagnostics> = frameDispatcher.diagnostics
 
-    val yoloAnalyzer = YoloFrameAnalyzer(objectDetector)
+    val yoloAnalyzer = YoloFrameAnalyzer(objectDetector, speechController = speechController)
     override val yoloState: StateFlow<YoloDebugState> = yoloAnalyzer.yoloState
 
     private var currentActiveMode: VisionMode = VisionMode.NAVIGATE

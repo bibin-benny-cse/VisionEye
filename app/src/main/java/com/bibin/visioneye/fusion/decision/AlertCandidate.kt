@@ -3,6 +3,23 @@ package com.bibin.visioneye.fusion.decision
 import com.bibin.visioneye.ai.HorizontalPosition
 
 /**
+ * Structured navigational alert types categorized by horizontal spatial orientation.
+ */
+enum class NavigationAlertType {
+    OBJECT_LEFT,
+    OBJECT_CENTER,
+    OBJECT_RIGHT;
+
+    companion object {
+        fun fromPosition(position: HorizontalPosition): NavigationAlertType = when (position) {
+            HorizontalPosition.LEFT -> OBJECT_LEFT
+            HorizontalPosition.CENTER -> OBJECT_CENTER
+            HorizontalPosition.RIGHT -> OBJECT_RIGHT
+        }
+    }
+}
+
+/**
  * Immutable contextual alert candidate produced by the [DecisionEngine].
  *
  * Represents an object detection that has been prioritized and formatted
@@ -15,6 +32,9 @@ import com.bibin.visioneye.ai.HorizontalPosition
  * @property priorityRank Granular numerical priority score used for deterministic arbitration.
  * @property message Concise descriptive message (e.g. "chair on your right", "person ahead").
  * @property timestampMs Epoch timestamp when the alert candidate was evaluated.
+ * @property alertType Structured alert categorization ([NavigationAlertType.OBJECT_LEFT], etc.).
+ * @property reason Human-readable explanation of why this alert was generated.
+ * @property observationCount Number of consecutive frames this object was stably observed.
  */
 data class AlertCandidate(
     val className: String,
@@ -23,7 +43,10 @@ data class AlertCandidate(
     val priority: AlertPriority,
     val priorityRank: Int = priority.rank,
     val message: String,
-    val timestampMs: Long = System.currentTimeMillis()
+    val timestampMs: Long = System.currentTimeMillis(),
+    val alertType: NavigationAlertType = NavigationAlertType.fromPosition(position),
+    val reason: String = "Stable detection in ${position.name} sector",
+    val observationCount: Int = 1
 ) {
     /**
      * Unique semantic key used for cooldown duplicate suppression.
@@ -49,7 +72,8 @@ data class AlertCandidate(
  *
  * Safety Boundary:
  * This generator produces purely descriptive spatial announcements and strictly
- * avoids safety/collision words ("obstacle", "danger", "collision", "stop").
+ * avoids safety/collision words ("obstacle", "danger", "collision", "stop")
+ * and distance assumptions ("near", "medium", "far", "1.5 meters").
  */
 object AlertMessageFormatter {
 
@@ -63,5 +87,13 @@ object AlertMessageFormatter {
             HorizontalPosition.CENTER -> "$label ahead"
             HorizontalPosition.RIGHT -> "$label on your right"
         }
+    }
+
+    /**
+     * Formats an alert utterance with capitalized first character for display banners.
+     */
+    fun formatCapitalized(className: String, position: HorizontalPosition): String {
+        val base = format(className, position)
+        return base.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
     }
 }

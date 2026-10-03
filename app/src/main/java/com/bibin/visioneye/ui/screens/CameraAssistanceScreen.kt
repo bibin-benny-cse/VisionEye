@@ -58,10 +58,13 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import com.bibin.visioneye.ai.Detection
+import com.bibin.visioneye.ai.HorizontalPosition
 import com.bibin.visioneye.ai.PreviewCoordinateMapper
 import com.bibin.visioneye.camera.CameraController
 import com.bibin.visioneye.camera.CameraState
 import com.bibin.visioneye.core.mode.VisionMode
+import com.bibin.visioneye.fusion.decision.AlertCandidate
+import com.bibin.visioneye.fusion.decision.AlertMessageFormatter
 import com.bibin.visioneye.ui.theme.HighContrastBlack
 import com.bibin.visioneye.ui.theme.HighContrastBorder
 import com.bibin.visioneye.ui.theme.HighContrastCard
@@ -186,6 +189,14 @@ fun CameraAssistanceScreen(
                             onStopCamera()
                         }
                     )
+
+                    // Navigation Guidance Banner (User-Facing Prominent Guidance)
+                    if (currentMode == VisionMode.NAVIGATE && cameraState is CameraState.Streaming) {
+                        NavigationGuidanceBanner(
+                            selectedAlert = yoloState.primaryAlert,
+                            hasDetections = yoloState.detections.isNotEmpty()
+                        )
+                    }
 
                     // Bottom Bar: Status information, diagnostics, and YOLO dev status
                     BottomStatusOverlay(
@@ -425,7 +436,50 @@ private fun BottomStatusOverlay(
                                 }
 
                                 if (yoloState.isReady) {
-                                    // 1. Raw YOLO detections
+                                    // 1. Structured Development HUD diagnostics (Milestone Navigation Alert Engine)
+                                    val primary = yoloState.primaryAlert
+                                    val selectedText = if (primary != null) "${primary.className} ${primary.position.name}" else "None"
+                                    val confText = if (primary != null) "${(primary.confidence * 100).toInt()}%" else "N/A"
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "Objects: ${yoloState.detections.size}  •  Selected: $selectedText",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = HighContrastWhite,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "Conf: $confText",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = HighContrastYellow,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "Alert: ${yoloState.alertStatus}  •  TTS: ${yoloState.ttsStatus}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = HighContrastCyan,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "Cooldown: 2500ms  •  Suppressed: ${yoloState.suppressedAlertCount}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (yoloState.suppressedAlertCount > 0) HighContrastYellow else HighContrastTextMuted,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    // 2. Raw YOLO detections
                                     Text(
                                         text = "RAW OBJECTS (${yoloState.detections.size})",
                                         style = MaterialTheme.typography.labelSmall,
@@ -453,7 +507,7 @@ private fun BottomStatusOverlay(
 
                                     Spacer(modifier = Modifier.height(4.dp))
 
-                                    // 2. DecisionEngine: Selected Prioritized Alerts
+                                    // 3. DecisionEngine: Selected Prioritized Alerts
                                     Text(
                                         text = "SELECTED ALERTS (${yoloState.selectedAlerts.size})",
                                         style = MaterialTheme.typography.labelSmall,
@@ -478,16 +532,6 @@ private fun BottomStatusOverlay(
                                             color = HighContrastTextMuted
                                         )
                                     }
-
-                                    Spacer(modifier = Modifier.height(4.dp))
-
-                                    // 3. Suppressed Alerts Count
-                                    Text(
-                                        text = "SUPPRESSED: ${yoloState.suppressedAlertCount}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (yoloState.suppressedAlertCount > 0) HighContrastYellow else HighContrastTextMuted,
-                                        fontWeight = FontWeight.Bold
-                                    )
                                 } else {
                                     Text(
                                         text = yoloState.statusMessage,
@@ -505,6 +549,103 @@ private fun BottomStatusOverlay(
                 text = "⚠️ White cane recommended. Prototype assistive system.",
                 style = MaterialTheme.typography.labelSmall,
                 color = HighContrastTextMuted
+            )
+        }
+    }
+}
+
+/**
+ * Prominent high-contrast guidance banner displaying conservative directional guidance
+ * for visually impaired users.
+ *
+ * Examples:
+ * - "CHAIR LEFT" / "Chair on your left"
+ * - "PERSON AHEAD" / "Person ahead"
+ * - "TABLE RIGHT" / "Table on your right"
+ *
+ * Follows WCAG AAA contrast, semantic accessibility, and clean separation from developer HUD.
+ */
+@Composable
+private fun NavigationGuidanceBanner(
+    selectedAlert: AlertCandidate?,
+    hasDetections: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .border(2.dp, if (selectedAlert != null) HighContrastYellow else NavigateBlue, RoundedCornerShape(16.dp))
+            .semantics {
+                val bannerDesc = when {
+                    selectedAlert != null -> selectedAlert.message
+                    hasDetections -> "Analyzing detected objects"
+                    else -> "Forward path clear"
+                }
+                contentDescription = "Navigation Guidance: $bannerDesc"
+            },
+        colors = CardDefaults.cardColors(
+            containerColor = HighContrastBlack.copy(alpha = 0.90f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(if (selectedAlert != null) HighContrastYellow else NavigateBlue)
+                )
+                Text(
+                    text = "NAVIGATE GUIDANCE",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = HighContrastCyan,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.5.sp
+                )
+            }
+
+            val (headlineText, subText) = when {
+                selectedAlert != null -> {
+                    val shortHeadline = when (selectedAlert.position) {
+                        HorizontalPosition.LEFT -> "${selectedAlert.className.uppercase()} LEFT"
+                        HorizontalPosition.CENTER -> "${selectedAlert.className.uppercase()} AHEAD"
+                        HorizontalPosition.RIGHT -> "${selectedAlert.className.uppercase()} RIGHT"
+                    }
+                    val descriptive = AlertMessageFormatter.formatCapitalized(
+                        selectedAlert.className,
+                        selectedAlert.position
+                    )
+                    shortHeadline to descriptive
+                }
+                hasDetections -> "ANALYZING..." to "Stabilizing environmental objects"
+                else -> "PATH CLEAR" to "No obstacles in forward view"
+            }
+
+            Text(
+                text = headlineText,
+                style = MaterialTheme.typography.headlineMedium,
+                color = if (selectedAlert != null) HighContrastYellow else HighContrastWhite,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = subText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = HighContrastWhite.copy(alpha = 0.85f),
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
             )
         }
     }

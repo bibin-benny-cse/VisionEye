@@ -212,7 +212,7 @@ class DecisionEngineTest {
             position = com.bibin.visioneye.ai.HorizontalPosition.LEFT
         )
 
-        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2))
+        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2, minimumStableObservations = 1))
         val result = engine.process(listOf(cup, person, chair), timestampMs = 1000L)
 
         assertEquals(2, result.selectedAlerts.size)
@@ -223,7 +223,7 @@ class DecisionEngineTest {
 
     @Test
     fun milestone5_testE_confidenceFiltering_respectsConfiguredAlertThreshold() {
-        val config = DecisionConfig(alertConfidenceThreshold = 0.60f)
+        val config = DecisionConfig(alertConfidenceThreshold = 0.60f, minimumStableObservations = 1)
         val engine = DefaultDecisionEngine(config)
 
         val highConfChair = com.bibin.visioneye.ai.Detection(
@@ -246,7 +246,7 @@ class DecisionEngineTest {
 
     @Test
     fun milestone5_testF_maximumCandidateCount_limitsSelectedAlertsToMaxSelectedAlerts() {
-        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2))
+        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2, minimumStableObservations = 1))
 
         val detections = (1..10).map { i ->
             com.bibin.visioneye.ai.Detection(
@@ -267,7 +267,7 @@ class DecisionEngineTest {
 
     @Test
     fun milestone5_testG_cooldown_sameClassSamePositionRepeatedImmediatelyIsSuppressed() {
-        val engine = DefaultDecisionEngine(DecisionConfig(cooldownPeriodMs = 4000L))
+        val engine = DefaultDecisionEngine(DecisionConfig(cooldownPeriodMs = 4000L, minimumStableObservations = 1))
 
         val chairLeft1 = com.bibin.visioneye.ai.Detection(
             classId = 56, label = "chair", confidence = 0.85f,
@@ -293,7 +293,7 @@ class DecisionEngineTest {
 
     @Test
     fun milestone5_testH_cooldownExpiration_sameClassSamePositionAfterCooldownIsPermitted() {
-        val engine = DefaultDecisionEngine(DecisionConfig(cooldownPeriodMs = 4000L))
+        val engine = DefaultDecisionEngine(DecisionConfig(cooldownPeriodMs = 4000L, minimumStableObservations = 1))
 
         val chairLeft = com.bibin.visioneye.ai.Detection(
             classId = 56, label = "chair", confidence = 0.85f,
@@ -313,7 +313,7 @@ class DecisionEngineTest {
 
     @Test
     fun milestone5_testI_twoObjectsOfSameClassInDifferentPositions_bothValid() {
-        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2))
+        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2, minimumStableObservations = 1))
 
         val chairLeft = com.bibin.visioneye.ai.Detection(
             classId = 56, label = "chair", confidence = 0.89f,
@@ -337,7 +337,7 @@ class DecisionEngineTest {
 
     @Test
     fun milestone5_testJ_deterministicOrdering_sameDetectionsProduceSameOutputOrder() {
-        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 3))
+        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 3, minimumStableObservations = 1))
 
         val d1 = com.bibin.visioneye.ai.Detection(
             classId = 0, label = "person", confidence = 0.90f,
@@ -397,7 +397,7 @@ class DecisionEngineTest {
      */
     @Test
     fun milestone5a_testA_threeValidDetectionsWithMaxSelectedAlerts2_yieldsTwoSelectedAlerts() {
-        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2))
+        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2, minimumStableObservations = 1))
 
         val chairLeft = Detection(
             classId = 56, label = "chair", confidence = 0.90f,
@@ -427,7 +427,7 @@ class DecisionEngineTest {
      */
     @Test
     fun milestone5a_testB_suppressedCount_reflectsUnselectedValidCandidates() {
-        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2))
+        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2, minimumStableObservations = 1))
 
         val chairLeft = Detection(
             classId = 56, label = "chair", confidence = 0.90f,
@@ -457,7 +457,7 @@ class DecisionEngineTest {
      */
     @Test
     fun milestone5a_testC_decisionEngineStatePersistsBetweenProcessingCalls() {
-        val engine = DefaultDecisionEngine(DecisionConfig(cooldownPeriodMs = 4000L, maxSelectedAlerts = 2))
+        val engine = DefaultDecisionEngine(DecisionConfig(cooldownPeriodMs = 4000L, maxSelectedAlerts = 2, minimumStableObservations = 1))
 
         val chairLeft = Detection(
             classId = 56, label = "chair", confidence = 0.90f,
@@ -486,7 +486,7 @@ class DecisionEngineTest {
      */
     @Test
     fun milestone5a_testD_repeatedSameClassSamePositionWithinCooldown_isSuppressed() {
-        val engine = DefaultDecisionEngine(DecisionConfig(cooldownPeriodMs = 4000L))
+        val engine = DefaultDecisionEngine(DecisionConfig(cooldownPeriodMs = 4000L, minimumStableObservations = 1))
 
         val cupCenter1 = Detection(
             classId = 41, label = "cup", confidence = 0.80f,
@@ -515,7 +515,7 @@ class DecisionEngineTest {
      */
     @Test
     fun milestone5a_testE_differentPositionsRemainIndependentlyEligible() {
-        val engine = DefaultDecisionEngine(DecisionConfig(cooldownPeriodMs = 4000L, maxSelectedAlerts = 2))
+        val engine = DefaultDecisionEngine(DecisionConfig(cooldownPeriodMs = 4000L, maxSelectedAlerts = 2, minimumStableObservations = 1))
 
         val chairLeft = Detection(
             classId = 56, label = "chair", confidence = 0.90f,
@@ -558,7 +558,7 @@ class DecisionEngineTest {
      */
     @Test
     fun milestone5a_testF_rawDetectionCountRemainsIndependentFromSelectedAlertCount() {
-        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2))
+        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2, minimumStableObservations = 1))
 
         val rawDetections = listOf(
             Detection(56, "chair", 0.90f, BoundingBox(0.05f, 0.2f, 0.25f, 0.8f), HorizontalPosition.LEFT),
@@ -581,7 +581,7 @@ class DecisionEngineTest {
      */
     @Test
     fun milestone5a_testG_uiStateContainsBothRawDetectionsAndSelectedAlerts() {
-        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2))
+        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2, minimumStableObservations = 1))
 
         val rawDetections = listOf(
             Detection(56, "chair", 0.90f, BoundingBox(0.05f, 0.2f, 0.25f, 0.8f), HorizontalPosition.LEFT),
@@ -620,7 +620,7 @@ class DecisionEngineTest {
      */
     @Test
     fun milestone5a_testH_noSelectedAlertListExceedsMaxSelectedAlerts() {
-        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2))
+        val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2, minimumStableObservations = 1))
 
         val candidateClasses = listOf("person", "car", "bicycle", "chair", "table", "cup")
         val detections = candidateClasses.mapIndexed { index, name ->

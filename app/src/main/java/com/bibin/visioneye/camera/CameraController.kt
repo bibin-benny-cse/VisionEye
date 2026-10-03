@@ -42,6 +42,12 @@ interface CameraController : ModeAwareComponent {
     val yoloState: StateFlow<com.bibin.visioneye.ai.YoloDebugState>
 
     /**
+     * Speech controller used for voice announcements and navigation alerts.
+     */
+    val speechController: com.bibin.visioneye.speech.SpeechController?
+        get() = null
+
+    /**
      * True if CAMERA runtime permission is currently granted.
      */
     val hasPermission: Boolean
