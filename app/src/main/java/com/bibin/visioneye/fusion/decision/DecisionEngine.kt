@@ -30,10 +30,43 @@ data class AlertItem(
  */
 data class DecisionResult(
     val selectedAlerts: List<AlertCandidate> = emptyList(),
+    val newAlertEvent: AlertCandidate? = null,
+    val newAlertEvents: List<AlertCandidate> = emptyList(),
     val suppressedCount: Int = 0,
     val totalCandidateCount: Int = 0,
     val timestampMs: Long = System.currentTimeMillis()
-)
+) {
+    // Secondary constructor for backward compatibility with 4-arg positional calls
+    constructor(
+        selectedAlerts: List<AlertCandidate>,
+        suppressedCount: Int,
+        totalCandidateCount: Int,
+        timestampMs: Long
+    ) : this(
+        selectedAlerts = selectedAlerts,
+        newAlertEvent = null,
+        newAlertEvents = emptyList(),
+        suppressedCount = suppressedCount,
+        totalCandidateCount = totalCandidateCount,
+        timestampMs = timestampMs
+    )
+
+    // Secondary constructor for backward compatibility with 5-arg positional calls (Milestone 5B)
+    constructor(
+        selectedAlerts: List<AlertCandidate>,
+        newAlertEvent: AlertCandidate?,
+        suppressedCount: Int,
+        totalCandidateCount: Int,
+        timestampMs: Long
+    ) : this(
+        selectedAlerts = selectedAlerts,
+        newAlertEvent = newAlertEvent,
+        newAlertEvents = if (newAlertEvent != null) listOf(newAlertEvent) else emptyList(),
+        suppressedCount = suppressedCount,
+        totalCandidateCount = totalCandidateCount,
+        timestampMs = timestampMs
+    )
+}
 
 /**
  * Lightweight spatial-temporal tracking entry representing an object observed across frames.
@@ -44,11 +77,13 @@ data class TrackedObject(
     var lastBoundingBox: BoundingBox,
     var lastPosition: HorizontalPosition,
     var observationCount: Int = 1,
+    var positionObservationCount: Int = 1,
     var firstSeenTimestampMs: Long,
     var lastSeenTimestampMs: Long,
     var confidence: Float,
     var lastAlertTimestampMs: Long = 0L,
-    var lastAlertPosition: HorizontalPosition? = null
+    var lastAlertPosition: HorizontalPosition? = null,
+    var lastSpokenPosition: HorizontalPosition? = null
 )
 
 /**
@@ -118,6 +153,7 @@ class DefaultDecisionEngine(
 
     private val lastAlertTimestamps = mutableMapOf<String, Long>()
     private val trackedObjects = mutableListOf<TrackedObject>()
+    private val lastSpokenPositions = mutableMapOf<String, HorizontalPosition>()
     private var nextTrackId = 1
     private val lock = Any()
 
@@ -126,10 +162,20 @@ class DefaultDecisionEngine(
         timestampMs: Long
     ): DecisionResult = synchronized(lock) {
         // 1. Purge stale tracked objects that disappeared beyond timeout
-        trackedObjects.removeAll { timestampMs - it.lastSeenTimestampMs > config.objectDisappearanceTimeoutMs }
+        val disappearedTracks = trackedObjects.filter { timestampMs - it.lastSeenTimestampMs > config.objectDisappearanceTimeoutMs }
+        for (stale in disappearedTracks) {
+            lastSpokenPositions.remove(stale.className.lowercase())
+        }
+        trackedObjects.removeAll(disappearedTracks.toSet())
 
         if (detections.isEmpty()) {
-            return DecisionResult(emptyList(), 0, 0, timestampMs)
+            return DecisionResult(
+                selectedAlerts = emptyList(),
+                newAlertEvent = null,
+                suppressedCount = 0,
+                totalCandidateCount = 0,
+                timestampMs = timestampMs
+            )
         }
 
         val activeCooldown = cooldownPeriodMs
@@ -162,7 +208,12 @@ class DefaultDecisionEngine(
             if (bestMatchIndex != -1) {
                 val matchedDet = validDetections[bestMatchIndex]
                 matchedDetectionIndices.add(bestMatchIndex)
-                track.lastPosition = matchedDet.position
+                if (matchedDet.position == track.lastPosition) {
+                    track.positionObservationCount++
+                } else {
+                    track.lastPosition = matchedDet.position
+                    track.positionObservationCount = 1
+                }
                 track.lastBoundingBox = matchedDet.boundingBox
                 track.confidence = matchedDet.confidence
                 track.lastSeenTimestampMs = timestampMs
@@ -180,6 +231,7 @@ class DefaultDecisionEngine(
                     lastBoundingBox = det.boundingBox,
                     lastPosition = det.position,
                     observationCount = 1,
+                    positionObservationCount = 1,
                     firstSeenTimestampMs = timestampMs,
                     lastSeenTimestampMs = timestampMs,
                     confidence = det.confidence
@@ -194,8 +246,9 @@ class DefaultDecisionEngine(
         var transientSuppressed = 0
 
         for (track in updatedTracksInThisCycle) {
-            // Enforce temporal stability requirement
-            if (track.observationCount < config.minimumStableObservations) {
+            // Enforce temporal stability requirement for track persistence and position sector
+            if (track.observationCount < config.minimumStableObservations ||
+                track.positionObservationCount < config.minimumStableObservations) {
                 transientSuppressed++
                 continue
             }
@@ -214,7 +267,8 @@ class DefaultDecisionEngine(
                 timestampMs = timestampMs,
                 alertType = NavigationAlertType.fromPosition(track.lastPosition),
                 reason = "Stable observation (${track.observationCount} frames) in ${track.lastPosition.name}",
-                observationCount = track.observationCount
+                observationCount = track.observationCount,
+                trackId = track.trackId
             )
             candidates.add(candidate)
         }
@@ -267,9 +321,11 @@ class DefaultDecisionEngine(
                 lastAlertTimestamps[key] = timestampMs
 
                 // Record alert emission on tracked object
-                trackedObjects.find {
-                    it.className.equals(candidate.className, ignoreCase = true) && it.lastPosition == candidate.position
-                }?.let {
+                val track = trackedObjects.find { it.trackId == candidate.trackId }
+                    ?: trackedObjects.find {
+                        it.className.equals(candidate.className, ignoreCase = true) && it.lastPosition == candidate.position
+                    }
+                track?.let {
                     it.lastAlertTimestampMs = timestampMs
                     it.lastAlertPosition = candidate.position
                 }
@@ -278,8 +334,34 @@ class DefaultDecisionEngine(
             }
         }
 
+        // 7. Authoritative Speech Trigger: Determine NEW eligible alert events
+        // Only unsuppressed selected alerts that transition into a new speech state can trigger speech.
+        // If an object is already speaking or has already been spoken in this position,
+        // it must NOT create repeated speech events while pointing at the same object.
+        val newAlerts = mutableListOf<AlertCandidate>()
+        for (candidate in selected) {
+            val track = trackedObjects.find { it.trackId == candidate.trackId }
+                ?: trackedObjects.find {
+                    it.className.equals(candidate.className, ignoreCase = true) && it.lastPosition == candidate.position
+                }
+
+            val alreadySpokenInThisPosition = if (track != null) {
+                track.lastSpokenPosition == candidate.position
+            } else {
+                lastSpokenPositions[candidate.className.lowercase()] == candidate.position
+            }
+
+            if (!alreadySpokenInThisPosition) {
+                newAlerts.add(candidate)
+                track?.lastSpokenPosition = candidate.position
+                lastSpokenPositions[candidate.className.lowercase()] = candidate.position
+            }
+        }
+
         DecisionResult(
             selectedAlerts = selected,
+            newAlertEvent = newAlerts.firstOrNull(),
+            newAlertEvents = newAlerts,
             suppressedCount = transientSuppressed + cooldownOrCapacitySuppressed,
             totalCandidateCount = validDetections.size,
             timestampMs = timestampMs
@@ -311,6 +393,7 @@ class DefaultDecisionEngine(
     override fun resetCooldowns() = synchronized(lock) {
         lastAlertTimestamps.clear()
         trackedObjects.clear()
+        lastSpokenPositions.clear()
         nextTrackId = 1
     }
 }

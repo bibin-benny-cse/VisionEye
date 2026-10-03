@@ -46,7 +46,8 @@ data class AlertCandidate(
     val timestampMs: Long = System.currentTimeMillis(),
     val alertType: NavigationAlertType = NavigationAlertType.fromPosition(position),
     val reason: String = "Stable detection in ${position.name} sector",
-    val observationCount: Int = 1
+    val observationCount: Int = 1,
+    val trackId: Int? = null
 ) {
     /**
      * Unique semantic key used for cooldown duplicate suppression.

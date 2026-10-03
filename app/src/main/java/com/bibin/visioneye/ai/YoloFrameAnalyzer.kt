@@ -7,6 +7,8 @@ import com.bibin.visioneye.camera.FrameAnalyzer
 import com.bibin.visioneye.fusion.decision.AlertCandidate
 import com.bibin.visioneye.fusion.decision.DecisionEngine
 import com.bibin.visioneye.fusion.decision.DefaultDecisionEngine
+import com.bibin.visioneye.speech.SpeechEventArbitrator
+import com.bibin.visioneye.speech.DefaultSpeechEventArbitrator
 import com.bibin.visioneye.speech.SpeechController
 import com.bibin.visioneye.speech.SpeechPriority
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +33,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * @property primaryAlert The top-ranked active alert candidate, if any.
  * @property alertStatus High-level alert status indicator ("ACTIVE", "COOLDOWN", "IDLE").
  * @property ttsStatus Current TextToSpeech status string.
+ * @property ttsQueuedCount Number of pending alerts in the speech arbitrator queue.
+ * @property ttsActiveMessage Message currently being spoken by TTS, if any.
  */
 data class YoloDebugState(
     val isReady: Boolean = false,
@@ -44,7 +48,10 @@ data class YoloDebugState(
     val suppressedAlertCount: Int = 0,
     val primaryAlert: AlertCandidate? = selectedAlerts.firstOrNull(),
     val alertStatus: String = if (selectedAlerts.isNotEmpty()) "ACTIVE" else if (detections.isNotEmpty()) "COOLDOWN" else "IDLE",
-    val ttsStatus: String = "READY"
+    val ttsStatus: String = "IDLE",
+    val newAlertEvent: AlertCandidate? = null,
+    val ttsQueuedCount: Int = 0,
+    val ttsActiveMessage: String? = null
 )
 
 /**
@@ -52,12 +59,13 @@ data class YoloDebugState(
  *
  * Implements [FrameAnalyzer] to consume scheduled frames at the configured rate (~5 FPS),
  * offloaded to a background thread, arbitrates alerts via [decisionEngine], triggers
- * acoustic feedback via [speechController], and streams detection results to [yoloState].
+ * single-channel acoustic feedback via [speechEventArbitrator], and streams detection results to [yoloState].
  */
 class YoloFrameAnalyzer(
     private val detector: ObjectDetector,
     val decisionEngine: DecisionEngine = DefaultDecisionEngine(),
-    val speechController: SpeechController? = null
+    val speechController: SpeechController? = null,
+    val speechEventArbitrator: SpeechEventArbitrator? = speechController?.let { DefaultSpeechEventArbitrator(it) }
 ) : FrameAnalyzer {
 
     private val _yoloState = MutableStateFlow(YoloDebugState())
@@ -87,10 +95,22 @@ class YoloFrameAnalyzer(
             // Execute rule-based context-aware decision engine with temporal stabilization
             val decisionResult = decisionEngine.process(detections)
 
-            // Trigger speech for newly selected active guidance alerts
-            if (decisionResult.selectedAlerts.isNotEmpty()) {
-                val primaryAlert = decisionResult.selectedAlerts.first()
-                speechController?.speak(primaryAlert.message, SpeechPriority.NORMAL)
+            // Authoritative Single-Channel Speech Arbitrator:
+            // Submit selected alerts sequentially to the arbitrator.
+            // Duplicate active/pending alerts are ignored, and alerts speak one at a time.
+            if (speechEventArbitrator != null) {
+                val alertsToSubmit = if (decisionResult.newAlertEvents.isNotEmpty()) {
+                    decisionResult.newAlertEvents
+                } else if (decisionResult.newAlertEvent != null) {
+                    listOf(decisionResult.newAlertEvent)
+                } else {
+                    emptyList()
+                }
+                speechEventArbitrator.submit(alertsToSubmit)
+            } else {
+                decisionResult.newAlertEvent?.let { newAlert ->
+                    speechController?.speak(newAlert.message, SpeechPriority.NORMAL)
+                }
             }
 
             // Check if detector encountered an inference error
@@ -106,6 +126,17 @@ class YoloFrameAnalyzer(
                 return
             }
 
+            val arbitratorQueued = speechEventArbitrator?.queuedCount ?: 0
+            val arbitratorSpeaking = speechEventArbitrator?.isSpeaking ?: false
+            val arbitratorActiveMsg = speechEventArbitrator?.activeAlert?.message
+
+            val currentTtsStatus = when {
+                arbitratorQueued > 0 -> "QUEUED ($arbitratorQueued)"
+                arbitratorSpeaking -> "SPEAKING"
+                decisionResult.newAlertEvent != null -> "SPOKEN"
+                else -> "IDLE"
+            }
+
             _yoloState.value = YoloDebugState(
                 isReady = true,
                 statusCode = DetectorStatusCode.MODEL_READY,
@@ -115,7 +146,11 @@ class YoloFrameAnalyzer(
                 detections = detections,
                 lastInferenceTimestamp = System.currentTimeMillis(),
                 selectedAlerts = decisionResult.selectedAlerts,
-                suppressedAlertCount = decisionResult.suppressedCount
+                suppressedAlertCount = decisionResult.suppressedCount,
+                newAlertEvent = decisionResult.newAlertEvent,
+                ttsStatus = currentTtsStatus,
+                ttsQueuedCount = arbitratorQueued,
+                ttsActiveMessage = arbitratorActiveMsg
             )
         } catch (t: Throwable) {
             Log.e(TAG, "Error executing YOLO frame analysis", t)
@@ -143,13 +178,17 @@ class YoloFrameAnalyzer(
      */
     fun reset() {
         decisionEngine.resetCooldowns()
+        speechEventArbitrator?.clear(stopActiveSpeech = true)
         speechController?.stop()
         val state = detector.state.value
         _yoloState.value = YoloDebugState(
             isReady = state is DetectorState.Ready,
             statusCode = state.statusCode,
             statusMessage = state.userStatusMessage,
-            diagnosticDetails = state.diagnosticDetails
+            diagnosticDetails = state.diagnosticDetails,
+            ttsStatus = "IDLE",
+            ttsQueuedCount = 0,
+            ttsActiveMessage = null
         )
     }
 

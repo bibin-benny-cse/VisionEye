@@ -459,15 +459,26 @@ private fun BottomStatusOverlay(
                                         )
                                     }
 
+                                    val newEventText = yoloState.newAlertEvent?.let { "${it.className} ${it.position.name}" } ?: "NONE"
+                                    val ttsDisplay = when {
+                                        yoloState.ttsQueuedCount > 0 -> "QUEUED (${yoloState.ttsQueuedCount})"
+                                        yoloState.ttsStatus == "SPEAKING" -> {
+                                            val msg = yoloState.ttsActiveMessage
+                                            if (msg != null) "SPEAKING \"$msg\"" else "SPEAKING"
+                                        }
+                                        yoloState.newAlertEvent != null -> "SPOKEN"
+                                        else -> yoloState.ttsStatus
+                                    }
+
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(
-                                            text = "Alert: ${yoloState.alertStatus}  •  TTS: ${yoloState.ttsStatus}",
+                                            text = "NEW EVENT: $newEventText  •  TTS: $ttsDisplay",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = HighContrastCyan,
-                                            fontWeight = FontWeight.SemiBold
+                                            color = if (yoloState.ttsStatus == "SPEAKING" || yoloState.ttsQueuedCount > 0) HighContrastYellow else HighContrastCyan,
+                                            fontWeight = FontWeight.Bold
                                         )
                                         Text(
                                             text = "Cooldown: 2500ms  •  Suppressed: ${yoloState.suppressedAlertCount}",

@@ -50,8 +50,18 @@ class DefaultSpeechController(
     private var lastSpokenText: String? = null
     private var lastSpokenTimeMs: Long = 0L
 
+    private val utteranceListeners = java.util.concurrent.CopyOnWriteArrayList<SpeechUtteranceListener>()
+
     init {
         initializeTts()
+    }
+
+    override fun addUtteranceListener(listener: SpeechUtteranceListener) {
+        utteranceListeners.add(listener)
+    }
+
+    override fun removeUtteranceListener(listener: SpeechUtteranceListener) {
+        utteranceListeners.remove(listener)
     }
 
     private fun initializeTts() {
@@ -82,20 +92,52 @@ class DefaultSpeechController(
                     tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(utteranceId: String?) {
                             _ttsStatus.value = TtsStatus.SPEAKING
+                            val id = utteranceId ?: ""
+                            for (listener in utteranceListeners) {
+                                try {
+                                    listener.onUtteranceStarted(id)
+                                } catch (t: Throwable) {
+                                    Log.w(TAG, "Error in utterance listener onStart", t)
+                                }
+                            }
                         }
 
                         override fun onDone(utteranceId: String?) {
                             _ttsStatus.value = TtsStatus.READY
+                            val id = utteranceId ?: ""
+                            for (listener in utteranceListeners) {
+                                try {
+                                    listener.onUtteranceCompleted(id)
+                                } catch (t: Throwable) {
+                                    Log.w(TAG, "Error in utterance listener onDone", t)
+                                }
+                            }
                         }
 
                         @Deprecated("Deprecated in Java")
                         override fun onError(utteranceId: String?) {
                             _ttsStatus.value = TtsStatus.READY
+                            val id = utteranceId ?: ""
+                            for (listener in utteranceListeners) {
+                                try {
+                                    listener.onUtteranceError(id)
+                                } catch (t: Throwable) {
+                                    Log.w(TAG, "Error in utterance listener onError", t)
+                                }
+                            }
                         }
 
                         override fun onError(utteranceId: String?, errorCode: Int) {
                             Log.w(TAG, "TTS utterance error: $errorCode for utteranceId: $utteranceId")
                             _ttsStatus.value = TtsStatus.READY
+                            val id = utteranceId ?: ""
+                            for (listener in utteranceListeners) {
+                                try {
+                                    listener.onUtteranceError(id, errorCode)
+                                } catch (t: Throwable) {
+                                    Log.w(TAG, "Error in utterance listener onError", t)
+                                }
+                            }
                         }
                     })
 
@@ -113,6 +155,11 @@ class DefaultSpeechController(
     }
 
     override fun speak(utterance: String, priority: SpeechPriority) {
+        val utteranceId = "visioneye_utt_${System.currentTimeMillis()}"
+        speak(utterance, priority, utteranceId)
+    }
+
+    override fun speak(utterance: String, priority: SpeechPriority, utteranceId: String) {
         val cleanText = utterance.trim()
         if (cleanText.isEmpty()) return
 
@@ -128,16 +175,15 @@ class DefaultSpeechController(
                 return
             }
 
-            // Controlled queueing policy:
-            // Flush old speech for safety/navigation updates so the user gets fresh spatial info immediately
+            // Controlled sequential queueing policy:
+            // Use QUEUE_ADD for controlled sequential queueing; only IMMEDIATE_SAFETY flushes active speech.
             val queueMode = when (priority) {
-                SpeechPriority.IMMEDIATE_SAFETY,
-                SpeechPriority.HIGH -> TextToSpeech.QUEUE_FLUSH
+                SpeechPriority.IMMEDIATE_SAFETY -> TextToSpeech.QUEUE_FLUSH
+                SpeechPriority.HIGH,
                 SpeechPriority.NORMAL,
-                SpeechPriority.BACKGROUND_INFO -> TextToSpeech.QUEUE_FLUSH
+                SpeechPriority.BACKGROUND_INFO -> TextToSpeech.QUEUE_ADD
             }
 
-            val utteranceId = "visioneye_utt_${System.currentTimeMillis()}"
             lastSpokenText = cleanText
             lastSpokenTimeMs = now
             _ttsStatus.value = TtsStatus.SPEAKING
@@ -150,6 +196,8 @@ class DefaultSpeechController(
         synchronized(lock) {
             try {
                 textToSpeech?.stop()
+                lastSpokenText = null
+                lastSpokenTimeMs = 0L
                 if (isInitialized) {
                     _ttsStatus.value = TtsStatus.READY
                 }
