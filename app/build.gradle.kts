@@ -67,6 +67,12 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
 
+    // Google Play Services Location (GPS foundation for NAVIGATION mode)
+    implementation(libs.play.services.location)
+
+    // HTTP networking for geocoding and pedestrian routing (OSRM / Nominatim)
+    implementation(libs.okhttp)
+
     // TensorFlow Lite (On-device ML inference for YOLOv8n)
     implementation(libs.tensorflow.lite)
 
@@ -79,6 +85,9 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
+    testImplementation(libs.json)
+    testImplementation(libs.okhttp.mockwebserver)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+
 }

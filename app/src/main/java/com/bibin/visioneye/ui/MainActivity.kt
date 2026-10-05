@@ -12,11 +12,15 @@ class MainActivity : ComponentActivity() {
         val app = application as VisionEyeApplication
         val modeManager = app.modeManager
         val cameraController = app.cameraController
+        val navigationController = app.navigationController
+        val emergencyController = app.emergencyController
 
         setContent {
             VisionEyeApp(
                 modeManager = modeManager,
-                cameraController = cameraController
+                cameraController = cameraController,
+                navigationController = navigationController,
+                emergencyController = emergencyController
             )
         }
     }

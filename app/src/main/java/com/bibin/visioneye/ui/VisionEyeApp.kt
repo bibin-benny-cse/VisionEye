@@ -9,10 +9,12 @@ import androidx.compose.runtime.setValue
 import com.bibin.visioneye.camera.CameraController
 import com.bibin.visioneye.core.mode.ModeManager
 import com.bibin.visioneye.core.mode.VisionMode
+import com.bibin.visioneye.navigation.NavigationController
 import com.bibin.visioneye.ui.screens.CameraAssistanceScreen
 import com.bibin.visioneye.ui.screens.EnrollPersonScreen
 import com.bibin.visioneye.ui.screens.MainScreen
 import com.bibin.visioneye.ui.screens.ManagePeopleScreen
+import com.bibin.visioneye.ui.screens.NavigationGpsScreen
 import com.bibin.visioneye.ui.theme.VisionEyeTheme
 
 /**
@@ -20,12 +22,14 @@ import com.bibin.visioneye.ui.theme.VisionEyeTheme
  *
  * Coordinates navigation between the mode selection dashboard ([MainScreen]),
  * the live vision scanning HUD ([CameraAssistanceScreen]), the face enrollment flow ([EnrollPersonScreen]),
- * and the locally enrolled profiles manager ([ManagePeopleScreen]).
+ * the locally enrolled profiles manager ([ManagePeopleScreen]), and the outdoor GPS wayfinding diagnostics ([NavigationGpsScreen]).
  */
 @Composable
 fun VisionEyeApp(
     modeManager: ModeManager,
-    cameraController: CameraController
+    cameraController: CameraController,
+    navigationController: NavigationController,
+    emergencyController: com.bibin.visioneye.emergency.EmergencyController
 ) {
     val currentMode by modeManager.currentMode.collectAsState()
     var isCameraActive by rememberSaveable { mutableStateOf(false) }
@@ -63,6 +67,22 @@ fun VisionEyeApp(
                     cameraController = cameraController,
                     onStopCamera = {
                         isCameraActive = false
+                    }
+                )
+            }
+            currentMode == VisionMode.NAVIGATION -> {
+                NavigationGpsScreen(
+                    navigationController = navigationController,
+                    onStopNavigation = {
+                        modeManager.setMode(VisionMode.NAVIGATE)
+                    }
+                )
+            }
+            currentMode == VisionMode.SOS -> {
+                com.bibin.visioneye.ui.screens.SosScreen(
+                    emergencyController = emergencyController,
+                    onExitSos = {
+                        modeManager.setMode(VisionMode.NAVIGATE)
                     }
                 )
             }
