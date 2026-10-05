@@ -22,6 +22,8 @@ import com.bibin.visioneye.ai.YoloDebugState
 import com.bibin.visioneye.ai.YoloFrameAnalyzer
 import com.bibin.visioneye.ai.YoloV8Detector
 import com.bibin.visioneye.core.mode.VisionMode
+import com.bibin.visioneye.people.PeopleCoordinator
+import com.bibin.visioneye.people.PeopleState
 import com.bibin.visioneye.read.ReadCoordinator
 import com.bibin.visioneye.read.ReadState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,6 +73,64 @@ class CameraManager(
 
     val readCoordinator = ReadCoordinator(speechController = speechController)
     override val readState: StateFlow<ReadState> = readCoordinator.readState
+
+    override val peopleRepository: com.bibin.visioneye.people.PeopleRepository =
+        com.bibin.visioneye.people.LocalFilePeopleRepository(context.filesDir)
+
+    val faceDetector: com.bibin.visioneye.people.FaceDetector =
+        com.bibin.visioneye.people.MlKitFaceDetector()
+
+    val embeddingModel: com.bibin.visioneye.people.FaceEmbeddingModel =
+        com.bibin.visioneye.people.MobileFaceNetEmbeddingModel(context)
+
+    val peopleCoordinator = com.bibin.visioneye.people.PeopleCoordinator(
+        faceDetector = faceDetector,
+        embeddingModel = embeddingModel,
+        repository = peopleRepository,
+        speechController = speechController
+    )
+    override val peopleState: StateFlow<PeopleState> = peopleCoordinator.peopleState
+
+    val enrollmentCoordinator = com.bibin.visioneye.people.EnrollmentCoordinator(
+        faceDetector = faceDetector,
+        embeddingModel = embeddingModel,
+        repository = peopleRepository,
+        speechController = speechController
+    )
+    override val enrollmentState: StateFlow<com.bibin.visioneye.people.EnrollmentState> =
+        enrollmentCoordinator.enrollmentState
+
+    private var _isEnrollmentActive: Boolean = false
+    override val isEnrollmentActive: Boolean
+        get() = _isEnrollmentActive
+
+    override fun startPersonEnrollment(name: String) {
+        _isEnrollmentActive = true
+        yoloAnalyzer.reset()
+        readCoordinator.deactivate()
+        peopleCoordinator.deactivate()
+        enrollmentCoordinator.startEnrollment(name)
+        setFrameAnalyzer(enrollmentCoordinator.frameAnalyzer)
+        Log.d(TAG, "startPersonEnrollment: enrollment frame analyzer attached and active.")
+    }
+
+    override fun stopPersonEnrollment() {
+        _isEnrollmentActive = false
+        enrollmentCoordinator.stopEnrollment()
+        when (currentActiveMode) {
+            VisionMode.NAVIGATE -> setFrameAnalyzer(yoloAnalyzer)
+            VisionMode.READ -> {
+                readCoordinator.activate()
+                setFrameAnalyzer(readCoordinator.frameAnalyzer)
+            }
+            VisionMode.PEOPLE -> {
+                peopleCoordinator.activate()
+                setFrameAnalyzer(peopleCoordinator.frameAnalyzer)
+            }
+            else -> clearFrameAnalyzer()
+        }
+        Log.d(TAG, "stopPersonEnrollment: restored analyzer for mode $currentActiveMode.")
+    }
 
     private var currentActiveMode: VisionMode = VisionMode.NAVIGATE
 
@@ -167,14 +227,23 @@ class CameraManager(
                 imageCapture = captureUseCase
                 useCases.add(captureUseCase)
 
-                // Attach active frame analyzer based on mode
-                when (currentActiveMode) {
-                    VisionMode.NAVIGATE -> setFrameAnalyzer(yoloAnalyzer)
-                    VisionMode.READ -> {
-                        readCoordinator.activate()
-                        setFrameAnalyzer(readCoordinator.frameAnalyzer)
+                // Attach active frame analyzer based on enrollment state or mode
+                if (_isEnrollmentActive) {
+                    Log.d(TAG, "bindCamera: enrollment is active; preserving enrollment frame analyzer.")
+                    setFrameAnalyzer(enrollmentCoordinator.frameAnalyzer)
+                } else {
+                    when (currentActiveMode) {
+                        VisionMode.NAVIGATE -> setFrameAnalyzer(yoloAnalyzer)
+                        VisionMode.READ -> {
+                            readCoordinator.activate()
+                            setFrameAnalyzer(readCoordinator.frameAnalyzer)
+                        }
+                        VisionMode.PEOPLE -> {
+                            peopleCoordinator.activate()
+                            setFrameAnalyzer(peopleCoordinator.frameAnalyzer)
+                        }
+                        else -> clearFrameAnalyzer()
                     }
-                    else -> clearFrameAnalyzer()
                 }
 
                 // Bind to Lifecycle with rear-facing camera selector
@@ -201,6 +270,7 @@ class CameraManager(
             clearFrameAnalyzer()
             yoloAnalyzer.reset()
             readCoordinator.deactivate()
+            peopleCoordinator.deactivate()
 
             imageAnalysis?.clearAnalyzer()
             imageAnalysis = null
@@ -238,6 +308,7 @@ class CameraManager(
             clearFrameAnalyzer()
             yoloAnalyzer.reset()
             readCoordinator.deactivate()
+            peopleCoordinator.deactivate()
 
             imageAnalysis?.clearAnalyzer()
             imageAnalysis = null
@@ -314,20 +385,33 @@ class CameraManager(
 
     override fun onModeChanged(newMode: VisionMode, previousMode: VisionMode) {
         currentActiveMode = newMode
+        if (_isEnrollmentActive) {
+            Log.d(TAG, "onModeChanged ignored for active frame analyzer while face enrollment is in progress.")
+            return
+        }
         when (newMode) {
             VisionMode.NAVIGATE -> {
                 readCoordinator.deactivate()
+                peopleCoordinator.deactivate()
                 setFrameAnalyzer(yoloAnalyzer)
             }
             VisionMode.READ -> {
                 yoloAnalyzer.reset()
+                peopleCoordinator.deactivate()
                 readCoordinator.activate()
                 setFrameAnalyzer(readCoordinator.frameAnalyzer)
+            }
+            VisionMode.PEOPLE -> {
+                yoloAnalyzer.reset()
+                readCoordinator.deactivate()
+                peopleCoordinator.activate()
+                setFrameAnalyzer(peopleCoordinator.frameAnalyzer)
             }
             else -> {
                 clearFrameAnalyzer()
                 yoloAnalyzer.reset()
                 readCoordinator.deactivate()
+                peopleCoordinator.deactivate()
             }
         }
 
@@ -344,6 +428,9 @@ class CameraManager(
         stopCamera()
         objectDetector.close()
         readCoordinator.release()
+        peopleCoordinator.release()
+        faceDetector.close()
+        embeddingModel.close()
         if (!analysisExecutor.isShutdown) {
             analysisExecutor.shutdown()
         }

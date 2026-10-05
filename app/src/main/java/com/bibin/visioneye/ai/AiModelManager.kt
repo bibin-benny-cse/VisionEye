@@ -11,7 +11,6 @@ import kotlinx.coroutines.Dispatchers
 enum class AiTaskType(val associatedMode: VisionMode) {
     OBJECT_AND_DEPTH_DETECTION(VisionMode.NAVIGATE),
     DOCUMENT_OCR(VisionMode.READ),
-    CURRENCY_CLASSIFICATION(VisionMode.CURRENCY),
     FACE_RECOGNITION(VisionMode.PEOPLE)
 }
 
@@ -50,7 +49,6 @@ interface AiModelManager : ModeAwareComponent {
         get() = setOf(
             VisionMode.NAVIGATE,
             VisionMode.READ,
-            VisionMode.CURRENCY,
             VisionMode.PEOPLE
         )
 

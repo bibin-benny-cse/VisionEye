@@ -73,6 +73,9 @@ dependencies {
     // Google ML Kit Text Recognition (On-device Latin OCR for READ mode)
     implementation(libs.mlkit.text.recognition)
 
+    // Google ML Kit Face Detection (On-device face & head-pose detection for PEOPLE mode)
+    implementation(libs.mlkit.face.detection)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

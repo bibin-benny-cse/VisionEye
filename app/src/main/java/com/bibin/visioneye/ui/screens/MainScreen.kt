@@ -37,7 +37,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bibin.visioneye.core.mode.VisionMode
-import com.bibin.visioneye.ui.theme.CurrencyAmber
 import com.bibin.visioneye.ui.theme.EmergencyRed
 import com.bibin.visioneye.ui.theme.HighContrastBlack
 import com.bibin.visioneye.ui.theme.HighContrastBorder
@@ -58,6 +57,9 @@ fun MainScreen(
     onModeSelected: (VisionMode) -> Unit,
     onStartCamera: () -> Unit = {},
     onStartReadMode: () -> Unit = {},
+    onStartPeopleMode: () -> Unit = {},
+    onSavePerson: () -> Unit = {},
+    onManagePeople: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -191,6 +193,96 @@ fun MainScreen(
                             }
                         }
                     }
+
+                    // 3. Recognize People Button (Direct entry to PEOPLE Mode Face Recognition)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(PeoplePurple)
+                            .border(2.dp, HighContrastWhite, RoundedCornerShape(12.dp))
+                            .clickable(onClick = onStartPeopleMode)
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "Recognize People. Opens camera to identify saved faces like Father or Mother. Double tap to activate."
+                            }
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Text(text = "👥", fontSize = 26.sp)
+                            Column {
+                                Text(
+                                    text = "RECOGNIZE PEOPLE",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = HighContrastWhite,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = "Identify saved individuals by name",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = HighContrastWhite.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    // People Sub-actions: SAVE PERSON & MANAGE SAVED PEOPLE
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(HighContrastCard)
+                                .border(1.dp, PeoplePurple, RoundedCornerShape(10.dp))
+                                .clickable(onClick = onSavePerson)
+                                .semantics {
+                                    role = Role.Button
+                                    contentDescription = "Save Person. Enroll new face into local storage. Double tap to activate."
+                                }
+                                .padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "➕ SAVE PERSON",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = PeoplePurple,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(HighContrastCard)
+                                .border(1.dp, HighContrastBorder, RoundedCornerShape(10.dp))
+                                .clickable(onClick = onManagePeople)
+                                .semantics {
+                                    role = Role.Button
+                                    contentDescription = "Manage Saved People. View and delete saved face profiles. Double tap to activate."
+                                }
+                                .padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "📋 MANAGE PEOPLE",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = HighContrastWhite,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
 
@@ -198,7 +290,10 @@ fun MainScreen(
             ActiveModeBanner(
                 mode = currentMode,
                 onStartCamera = onStartCamera,
-                onStartReadMode = onStartReadMode
+                onStartReadMode = onStartReadMode,
+                onStartPeopleMode = onStartPeopleMode,
+                onSavePerson = onSavePerson,
+                onManagePeople = onManagePeople
             )
 
             // Architecture Mode Rule Card
@@ -226,6 +321,8 @@ fun MainScreen(
                     onClick = {
                         if (mode == VisionMode.READ) {
                             onStartReadMode()
+                        } else if (mode == VisionMode.PEOPLE) {
+                            onStartPeopleMode()
                         } else if (mode == VisionMode.NAVIGATE) {
                             if (mode == currentMode) {
                                 onStartCamera()
@@ -249,6 +346,9 @@ private fun ActiveModeBanner(
     mode: VisionMode,
     onStartCamera: () -> Unit,
     onStartReadMode: () -> Unit = {},
+    onStartPeopleMode: () -> Unit = {},
+    onSavePerson: () -> Unit = {},
+    onManagePeople: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accentColor = getModeAccentColor(mode)
@@ -349,6 +449,88 @@ private fun ActiveModeBanner(
                             style = MaterialTheme.typography.titleMedium,
                             color = HighContrastBlack,
                             fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+            }
+
+            // Direct camera scanning and management buttons when in PEOPLE mode
+            if (mode == VisionMode.PEOPLE) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(58.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(PeoplePurple)
+                        .border(2.dp, HighContrastWhite, RoundedCornerShape(12.dp))
+                        .clickable(onClick = onStartPeopleMode)
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = "Start face recognition. Opens camera to identify saved people. Double tap to start."
+                        }
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(text = "👥", fontSize = 22.sp)
+                        Text(
+                            text = "START FACE RECOGNITION",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = HighContrastWhite,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(HighContrastCard)
+                            .border(1.dp, PeoplePurple, RoundedCornerShape(10.dp))
+                            .clickable(onClick = onSavePerson)
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "Save person. Enroll new face into device."
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "➕ SAVE PERSON",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = PeoplePurple,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(HighContrastCard)
+                            .border(1.dp, HighContrastBorder, RoundedCornerShape(10.dp))
+                            .clickable(onClick = onManagePeople)
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "Manage saved people. View and delete profiles."
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "📋 MANAGE PEOPLE",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = HighContrastWhite,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -532,7 +714,6 @@ private fun getModeAccentColor(mode: VisionMode): Color {
     return when (mode) {
         VisionMode.NAVIGATE -> NavigateBlue
         VisionMode.READ -> ReadGreen
-        VisionMode.CURRENCY -> CurrencyAmber
         VisionMode.PEOPLE -> PeoplePurple
         VisionMode.NAVIGATION -> NavigationTeal
         VisionMode.SOS -> EmergencyRed

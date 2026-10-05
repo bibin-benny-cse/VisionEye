@@ -54,6 +54,40 @@ interface CameraController : ModeAwareComponent {
         get() = kotlinx.coroutines.flow.MutableStateFlow(com.bibin.visioneye.read.ReadState.Searching)
 
     /**
+     * Observable stream of PEOPLE mode state.
+     */
+    val peopleState: StateFlow<com.bibin.visioneye.people.PeopleState>
+        get() = kotlinx.coroutines.flow.MutableStateFlow(com.bibin.visioneye.people.PeopleState())
+
+    /**
+     * Local storage repository for enrolled people profiles and face embeddings.
+     */
+    val peopleRepository: com.bibin.visioneye.people.PeopleRepository?
+        get() = null
+
+    /**
+     * Observable stream of face enrollment state during "SAVE PERSON" flow.
+     */
+    val enrollmentState: StateFlow<com.bibin.visioneye.people.EnrollmentState>
+        get() = kotlinx.coroutines.flow.MutableStateFlow(com.bibin.visioneye.people.EnrollmentState())
+
+    /**
+     * True if face enrollment is currently active.
+     */
+    val isEnrollmentActive: Boolean
+        get() = false
+
+    /**
+     * Starts camera-guided face enrollment for a new person.
+     */
+    fun startPersonEnrollment(name: String) {}
+
+    /**
+     * Stops face enrollment.
+     */
+    fun stopPersonEnrollment() {}
+
+    /**
      * Triggers high-resolution capture via CameraX ImageCapture.
      */
     fun captureImage(
@@ -72,13 +106,12 @@ interface CameraController : ModeAwareComponent {
     fun checkCameraPermission(): Boolean
 
     /**
-     * Modes that require camera frames: NAVIGATE, READ, CURRENCY, PEOPLE.
+     * Modes that require camera frames: NAVIGATE, READ, PEOPLE.
      */
     override val supportedModes: Set<VisionMode>
         get() = setOf(
             VisionMode.NAVIGATE,
             VisionMode.READ,
-            VisionMode.CURRENCY,
             VisionMode.PEOPLE
         )
 

@@ -62,6 +62,7 @@ import com.bibin.visioneye.ai.PreviewCoordinateMapper
 import com.bibin.visioneye.camera.CameraController
 import com.bibin.visioneye.camera.CameraState
 import com.bibin.visioneye.core.mode.VisionMode
+import com.bibin.visioneye.people.PeopleState
 import com.bibin.visioneye.ui.theme.HighContrastBlack
 import com.bibin.visioneye.ui.theme.HighContrastBorder
 import com.bibin.visioneye.ui.theme.HighContrastCard
@@ -71,6 +72,7 @@ import com.bibin.visioneye.ui.theme.HighContrastTextMuted
 import com.bibin.visioneye.ui.theme.HighContrastWhite
 import com.bibin.visioneye.ui.theme.HighContrastYellow
 import com.bibin.visioneye.ui.theme.NavigateBlue
+import com.bibin.visioneye.ui.theme.PeoplePurple
 import com.bibin.visioneye.ui.theme.ReadGreen
 
 /**
@@ -93,6 +95,7 @@ fun CameraAssistanceScreen(
     val cameraState by cameraController.state.collectAsState()
     val diagnostics by cameraController.diagnostics.collectAsState()
     val yoloState by cameraController.yoloState.collectAsState()
+    val peopleState by cameraController.peopleState.collectAsState()
 
     var showDebugOverlay by remember {
         mutableStateOf(true) // Development-only bounding-box overlay active in dev
@@ -161,13 +164,21 @@ fun CameraAssistanceScreen(
                     }
                 )
 
-                // 2. Development-only Bounding-Box Overlay (NAVIGATE mode)
-                if (showDebugOverlay && currentMode == VisionMode.NAVIGATE && yoloState.isReady && yoloState.detections.isNotEmpty()) {
-                    DetectionOverlay(
-                        detections = yoloState.detections,
-                        streamWidth = diagnostics.imageWidth,
-                        streamHeight = diagnostics.imageHeight
-                    )
+                // 2. Development-only Bounding-Box Overlay (NAVIGATE and PEOPLE modes)
+                if (showDebugOverlay) {
+                    if (currentMode == VisionMode.NAVIGATE && yoloState.isReady && yoloState.detections.isNotEmpty()) {
+                        DetectionOverlay(
+                            detections = yoloState.detections,
+                            streamWidth = diagnostics.imageWidth,
+                            streamHeight = diagnostics.imageHeight
+                        )
+                    } else if (currentMode == VisionMode.PEOPLE && peopleState.detections.isNotEmpty()) {
+                        DetectionOverlay(
+                            detections = peopleState.detections,
+                            streamWidth = diagnostics.imageWidth,
+                            streamHeight = diagnostics.imageHeight
+                        )
+                    }
                 }
 
                 // 3. High-Contrast Overlay HUD
@@ -193,6 +204,7 @@ fun CameraAssistanceScreen(
                         cameraState = cameraState,
                         diagnostics = diagnostics,
                         yoloState = yoloState,
+                        peopleState = peopleState,
                         showDebugOverlay = showDebugOverlay,
                         onToggleOverlay = { showDebugOverlay = !showDebugOverlay }
                     )
@@ -251,12 +263,18 @@ private fun TopBarControls(
         }
 
         // Mode and Live Status Badge
+        val badgeBorderColor = when (currentMode) {
+            VisionMode.PEOPLE -> PeoplePurple
+            VisionMode.READ -> ReadGreen
+            else -> NavigateBlue
+        }
+
         Box(
             modifier = Modifier
                 .height(54.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(HighContrastBlack.copy(alpha = 0.85f))
-                .border(2.dp, NavigateBlue, RoundedCornerShape(12.dp))
+                .border(2.dp, badgeBorderColor, RoundedCornerShape(12.dp))
                 .padding(horizontal = 14.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -295,6 +313,7 @@ private fun BottomStatusOverlay(
     cameraState: CameraState,
     diagnostics: com.bibin.visioneye.camera.FrameAnalysisDiagnostics,
     yoloState: com.bibin.visioneye.ai.YoloDebugState,
+    peopleState: PeopleState = PeopleState(),
     showDebugOverlay: Boolean = true,
     onToggleOverlay: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -353,7 +372,11 @@ private fun BottomStatusOverlay(
                 )
             } else {
                 Text(
-                    text = "Scanning forward path. Obstacle detection pipeline connected.",
+                    text = if (currentMode == VisionMode.PEOPLE) {
+                        "Scanning forward path for saved people using on-device face recognition."
+                    } else {
+                        "Scanning forward path. Obstacle detection pipeline connected."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = HighContrastWhite
                 )
@@ -482,6 +505,105 @@ private fun BottomStatusOverlay(
                                         text = yoloState.statusMessage,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = HighContrastTextMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Development & Status Display (PEOPLE mode)
+                    if (currentMode == VisionMode.PEOPLE) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(HighContrastCard, RoundedCornerShape(8.dp))
+                                .border(1.dp, PeoplePurple.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                .padding(12.dp)
+                                .semantics {
+                                    contentDescription = "Face recognition active. Status: ${peopleState.statusMessage}"
+                                }
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "FACE RECOGNITION ACTIVE",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = PeoplePurple,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (peopleState.isConfirmed) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(if (showDebugOverlay) HighContrastYellow else HighContrastSurface)
+                                                    .border(1.dp, HighContrastBorder, RoundedCornerShape(6.dp))
+                                                    .clickable { onToggleOverlay() }
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (showDebugOverlay) "BOXES: ON" else "BOXES: OFF",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = if (showDebugOverlay) HighContrastBlack else HighContrastWhite,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 10.sp
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = if (peopleState.isConfirmed) "CONFIRMED" else "SCANNING...",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (peopleState.isConfirmed) ReadGreen else HighContrastYellow,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = peopleState.statusMessage,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = if (peopleState.isConfirmed) ReadGreen else HighContrastYellow,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                if (peopleState.isConfirmed) {
+                                    val summary = when {
+                                        peopleState.recognizedNames.isNotEmpty() ->
+                                            "${PeopleState.formatNames(peopleState.recognizedNames)} recognized ahead in camera view"
+                                        peopleState.hasUnknownPerson ->
+                                            "Unknown person detected ahead in camera view"
+                                        else -> "1 person confirmed ahead"
+                                    }
+                                    Text(
+                                        text = summary,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = HighContrastWhite,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Scanning forward path. On-device MobileFaceNet identifies saved people after temporal verification.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = HighContrastTextMuted
+                                    )
+                                }
+
+                                if (peopleState.candidates.isNotEmpty()) {
+                                    val candidateLabels = peopleState.candidates.joinToString { cand ->
+                                        if (cand.isKnown) "${cand.displayName} (${(cand.similarity * 100).toInt()}%)" else "Unknown (${(cand.similarity * 100).toInt()}%)"
+                                    }
+                                    Text(
+                                        text = "Faces in view: $candidateLabels",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = HighContrastCyan
                                     )
                                 }
                             }

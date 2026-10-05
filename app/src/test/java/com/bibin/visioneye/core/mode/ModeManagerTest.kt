@@ -23,7 +23,7 @@ class ModeManagerTest {
 
     @Test
     fun allExpectedModesExist() {
-        val expectedModes = setOf("NAVIGATE", "READ", "CURRENCY", "PEOPLE", "NAVIGATION", "SOS")
+        val expectedModes = setOf("NAVIGATE", "READ", "PEOPLE", "NAVIGATION", "SOS")
         val actualModes = VisionMode.entries.map { it.name }.toSet()
         assertEquals(expectedModes, actualModes)
     }
@@ -38,13 +38,13 @@ class ModeManagerTest {
 
     @Test
     fun setMode_toSameMode_returnsFalse() {
-        val initialResult = modeManager.setMode(VisionMode.CURRENCY)
+        val initialResult = modeManager.setMode(VisionMode.PEOPLE)
         assertTrue(initialResult)
 
         // Attempting to switch to the already active mode should return false
-        val redundantResult = modeManager.setMode(VisionMode.CURRENCY)
+        val redundantResult = modeManager.setMode(VisionMode.PEOPLE)
         assertFalse(redundantResult)
-        assertEquals(VisionMode.CURRENCY, modeManager.getMode())
+        assertEquals(VisionMode.PEOPLE, modeManager.getMode())
     }
 
     @Test
