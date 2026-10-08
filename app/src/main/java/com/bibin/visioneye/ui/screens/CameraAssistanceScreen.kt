@@ -62,6 +62,7 @@ import com.bibin.visioneye.ai.PreviewCoordinateMapper
 import com.bibin.visioneye.camera.CameraController
 import com.bibin.visioneye.camera.CameraState
 import com.bibin.visioneye.core.mode.VisionMode
+import com.bibin.visioneye.fusion.decision.AlertCandidate
 import com.bibin.visioneye.people.PeopleState
 import com.bibin.visioneye.ui.theme.HighContrastBlack
 import com.bibin.visioneye.ui.theme.HighContrastBorder
@@ -170,7 +171,8 @@ fun CameraAssistanceScreen(
                         DetectionOverlay(
                             detections = yoloState.detections,
                             streamWidth = diagnostics.imageWidth,
-                            streamHeight = diagnostics.imageHeight
+                            streamHeight = diagnostics.imageHeight,
+                            selectedAlerts = yoloState.selectedAlerts
                         )
                     } else if (currentMode == VisionMode.PEOPLE && peopleState.detections.isNotEmpty()) {
                         DetectionOverlay(
@@ -457,8 +459,12 @@ private fun BottomStatusOverlay(
                                         )
                                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             yoloState.detections.take(4).forEach { det ->
+                                                val matchingAlert = yoloState.selectedAlerts.find {
+                                                    it.className.equals(det.className, ignoreCase = true) && it.position == det.position
+                                                }
+                                                val proximityTag = matchingAlert?.let { " • ${it.proximity.name}" } ?: ""
                                                 Text(
-                                                    text = "${det.className} ${(det.confidence * 100).toInt()}% ${det.position.name}",
+                                                    text = "${det.className} ${(det.confidence * 100).toInt()}% ${det.position.name}$proximityTag",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = HighContrastWhite,
                                                     fontWeight = FontWeight.Medium
@@ -478,7 +484,7 @@ private fun BottomStatusOverlay(
                                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                                 yoloState.selectedAlerts.forEach { alert ->
                                                     Text(
-                                                        text = "• ${alert.message}",
+                                                        text = "• ${alert.message} [${alert.proximity.name}]",
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = HighContrastWhite,
                                                         fontWeight = FontWeight.SemiBold
@@ -732,6 +738,7 @@ private fun DetectionOverlay(
     detections: List<Detection>,
     streamWidth: Int,
     streamHeight: Int,
+    selectedAlerts: List<AlertCandidate> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val textMeasurer = rememberTextMeasurer()
@@ -760,8 +767,12 @@ private fun DetectionOverlay(
                 style = Stroke(width = 3.dp.toPx())
             )
 
-            // 2. Measure label pill text: e.g. "refrigerator 80% RIGHT"
-            val labelText = "${det.className} ${(det.confidence * 100).toInt()}% ${det.position.name}"
+            // 2. Measure label pill text: e.g. "refrigerator 80% RIGHT NEAR"
+            val matchingAlert = selectedAlerts.find {
+                it.className.equals(det.className, ignoreCase = true) && it.position == det.position
+            }
+            val proximityBadge = matchingAlert?.let { " ${it.proximity.name}" } ?: ""
+            val labelText = "${det.className} ${(det.confidence * 100).toInt()}% ${det.position.name}$proximityBadge"
             val textLayoutResult = textMeasurer.measure(
                 text = labelText,
                 style = TextStyle(

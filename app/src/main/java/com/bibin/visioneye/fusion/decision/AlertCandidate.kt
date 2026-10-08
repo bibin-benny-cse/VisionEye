@@ -47,14 +47,15 @@ data class AlertCandidate(
     val alertType: NavigationAlertType = NavigationAlertType.fromPosition(position),
     val reason: String = "Stable detection in ${position.name} sector",
     val observationCount: Int = 1,
-    val trackId: Int? = null
+    val trackId: Int? = null,
+    val proximity: ProximityLevel = ProximityLevel.MEDIUM
 ) {
     /**
      * Unique semantic key used for cooldown duplicate suppression.
-     * Combines object class name and horizontal position (e.g. "chair_LEFT").
+     * Combines object class name, horizontal position, and proximity level (e.g. "chair_LEFT_NEAR").
      */
     val deduplicationKey: String
-        get() = "${className}_${position.name}"
+        get() = "${className}_${position.name}_${proximity.name}"
 
     /**
      * Human-readable alias for [className] representing the detected object.
@@ -66,35 +67,49 @@ data class AlertCandidate(
 /**
  * Dedicated utility for generating concise, position-aware contextual alert messages.
  *
- * Position Mapping:
- * - LEFT:   "<object> on your left"
- * - CENTER: "<object> ahead"
- * - RIGHT:  "<object> on your right"
+ * Position & Proximity Mapping:
+ * - NEAR:   "<object> close ahead", "<object> close on your left", "<object> close on your right"
+ * - MEDIUM: "<object> ahead", "<object> on your left", "<object> on your right"
+ * - FAR:    "<object> ahead", "<object> on your left", "<object> on your right"
  *
  * Safety Boundary:
  * This generator produces purely descriptive spatial announcements and strictly
- * avoids safety/collision words ("obstacle", "danger", "collision", "stop")
- * and distance assumptions ("near", "medium", "far", "1.5 meters").
+ * avoids collision words ("danger", "collision", "stop") and exact metric distance assumptions.
  */
 object AlertMessageFormatter {
 
     /**
-     * Formats an alert utterance for an object at a given [position].
+     * Formats an alert utterance for an object at a given [position] and coarse [proximity].
+     *
+     * Exact patterns:
+     * - NEAR:   "<object>, close, ahead" / "<object>, close, on your left" / "<object>, close, on your right"
+     * - MEDIUM: "<object>, medium, ahead" / "<object>, medium, on your left" / "<object>, medium, on your right"
+     * - FAR:    "<object>, far, ahead" / "<object>, far, on your left" / "<object>, far, on your right"
      */
-    fun format(className: String, position: HorizontalPosition): String {
+    fun format(
+        className: String,
+        position: HorizontalPosition,
+        proximity: ProximityLevel = ProximityLevel.MEDIUM
+    ): String {
         val label = className.trim()
-        return when (position) {
-            HorizontalPosition.LEFT -> "$label on your left"
-            HorizontalPosition.CENTER -> "$label ahead"
-            HorizontalPosition.RIGHT -> "$label on your right"
+        val proximityWord = proximity.spokenText
+        val positionWord = when (position) {
+            HorizontalPosition.LEFT -> "on your left"
+            HorizontalPosition.CENTER -> "ahead"
+            HorizontalPosition.RIGHT -> "on your right"
         }
+        return "$label, $proximityWord, $positionWord"
     }
 
     /**
      * Formats an alert utterance with capitalized first character for display banners.
      */
-    fun formatCapitalized(className: String, position: HorizontalPosition): String {
-        val base = format(className, position)
+    fun formatCapitalized(
+        className: String,
+        position: HorizontalPosition,
+        proximity: ProximityLevel = ProximityLevel.MEDIUM
+    ): String {
+        val base = format(className, position, proximity)
         return base.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
     }
 }

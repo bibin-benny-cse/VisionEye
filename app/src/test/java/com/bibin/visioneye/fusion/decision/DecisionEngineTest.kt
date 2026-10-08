@@ -141,7 +141,7 @@ class DecisionEngineTest {
             classId = 56,
             label = "chair",
             confidence = 0.88f,
-            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.05f, 0.2f, 0.25f, 0.8f),
+            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.05f, 0.3f, 0.25f, 0.7f),
             position = com.bibin.visioneye.ai.HorizontalPosition.LEFT
         )
         val result = decisionEngine.process(listOf(detection), timestampMs = 1000L)
@@ -150,7 +150,7 @@ class DecisionEngineTest {
         val alert = result.selectedAlerts[0]
         assertEquals("chair", alert.className)
         assertEquals(com.bibin.visioneye.ai.HorizontalPosition.LEFT, alert.position)
-        assertEquals("chair on your left", alert.message)
+        assertEquals("chair, medium, on your left", alert.message)
     }
 
     @Test
@@ -159,7 +159,7 @@ class DecisionEngineTest {
             classId = 60,
             label = "dining table",
             confidence = 0.85f,
-            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.40f, 0.2f, 0.60f, 0.8f),
+            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.40f, 0.3f, 0.60f, 0.7f),
             position = com.bibin.visioneye.ai.HorizontalPosition.CENTER
         )
         val result = decisionEngine.process(listOf(detection), timestampMs = 1000L)
@@ -168,11 +168,11 @@ class DecisionEngineTest {
         val alert = result.selectedAlerts[0]
         assertEquals("dining table", alert.className)
         assertEquals(com.bibin.visioneye.ai.HorizontalPosition.CENTER, alert.position)
-        assertEquals("dining table ahead", alert.message)
+        assertEquals("dining table, medium, ahead", alert.message)
 
         // Also test direct "table" alias
         val message = AlertMessageFormatter.format("table", com.bibin.visioneye.ai.HorizontalPosition.CENTER)
-        assertEquals("table ahead", message)
+        assertEquals("table, medium, ahead", message)
     }
 
     @Test
@@ -181,7 +181,7 @@ class DecisionEngineTest {
             classId = 41,
             label = "cup",
             confidence = 0.75f,
-            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.80f, 0.3f, 0.95f, 0.7f),
+            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.80f, 0.35f, 0.95f, 0.65f),
             position = com.bibin.visioneye.ai.HorizontalPosition.RIGHT
         )
         val result = decisionEngine.process(listOf(detection), timestampMs = 1000L)
@@ -190,7 +190,7 @@ class DecisionEngineTest {
         val alert = result.selectedAlerts[0]
         assertEquals("cup", alert.className)
         assertEquals(com.bibin.visioneye.ai.HorizontalPosition.RIGHT, alert.position)
-        assertEquals("cup on your right", alert.message)
+        assertEquals("cup, medium, on your right", alert.message)
     }
 
     @Test
@@ -308,7 +308,7 @@ class DecisionEngineTest {
         // Second frame after cooldown at t = 5500ms (4500ms later > 4000ms)
         val result2 = engine.process(listOf(chairLeft), timestampMs = 5500L)
         assertEquals(1, result2.selectedAlerts.size)
-        assertEquals("chair on your left", result2.selectedAlerts[0].message)
+        assertEquals("chair, medium, on your left", result2.selectedAlerts[0].message)
     }
 
     @Test
@@ -330,8 +330,8 @@ class DecisionEngineTest {
 
         assertEquals(2, result.selectedAlerts.size)
         val messages = result.selectedAlerts.map { it.message }
-        assertTrue(messages.contains("chair on your left"))
-        assertTrue(messages.contains("chair on your right"))
+        assertTrue(messages.contains("chair, medium, on your left"))
+        assertTrue(messages.contains("chair, medium, on your right"))
         assertEquals(0, result.suppressedCount)
     }
 
@@ -341,17 +341,17 @@ class DecisionEngineTest {
 
         val d1 = com.bibin.visioneye.ai.Detection(
             classId = 0, label = "person", confidence = 0.90f,
-            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.4f, 0.2f, 0.6f, 0.8f),
+            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.4f, 0.3f, 0.6f, 0.7f),
             position = com.bibin.visioneye.ai.HorizontalPosition.CENTER
         )
         val d2 = com.bibin.visioneye.ai.Detection(
             classId = 2, label = "car", confidence = 0.85f,
-            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.7f, 0.2f, 0.9f, 0.8f),
+            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.7f, 0.3f, 0.9f, 0.7f),
             position = com.bibin.visioneye.ai.HorizontalPosition.RIGHT
         )
         val d3 = com.bibin.visioneye.ai.Detection(
             classId = 56, label = "chair", confidence = 0.95f,
-            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.05f, 0.2f, 0.25f, 0.8f),
+            boundingBox = com.bibin.visioneye.ai.BoundingBox(0.05f, 0.3f, 0.25f, 0.7f),
             position = com.bibin.visioneye.ai.HorizontalPosition.LEFT
         )
 
@@ -364,9 +364,9 @@ class DecisionEngineTest {
         val result2 = engine.process(listOf(d3, d1, d2), timestampMs = 1000L)
 
         assertEquals(result1.selectedAlerts.map { it.message }, result2.selectedAlerts.map { it.message })
-        assertEquals("person ahead", result1.selectedAlerts[0].message)
-        assertEquals("car on your right", result1.selectedAlerts[1].message)
-        assertEquals("chair on your left", result1.selectedAlerts[2].message)
+        assertEquals("person, medium, ahead", result1.selectedAlerts[0].message)
+        assertEquals("car, medium, on your right", result1.selectedAlerts[1].message)
+        assertEquals("chair, medium, on your left", result1.selectedAlerts[2].message)
     }
 
     @Test
@@ -401,12 +401,12 @@ class DecisionEngineTest {
 
         val chairLeft = Detection(
             classId = 56, label = "chair", confidence = 0.90f,
-            boundingBox = BoundingBox(0.05f, 0.2f, 0.25f, 0.8f),
+            boundingBox = BoundingBox(0.05f, 0.3f, 0.25f, 0.7f),
             position = HorizontalPosition.LEFT
         )
         val chairRight = Detection(
             classId = 56, label = "chair", confidence = 0.85f,
-            boundingBox = BoundingBox(0.70f, 0.2f, 0.95f, 0.8f),
+            boundingBox = BoundingBox(0.70f, 0.3f, 0.95f, 0.7f),
             position = HorizontalPosition.RIGHT
         )
         val chairLeft2 = Detection(
@@ -418,8 +418,8 @@ class DecisionEngineTest {
         val result = engine.process(listOf(chairLeft, chairRight, chairLeft2), timestampMs = 1000L)
 
         assertEquals("Exactly 2 alerts should be selected when maxSelectedAlerts = 2", 2, result.selectedAlerts.size)
-        assertEquals("chair on your left", result.selectedAlerts[0].message)
-        assertEquals("chair on your right", result.selectedAlerts[1].message)
+        assertEquals("chair, medium, on your left", result.selectedAlerts[0].message)
+        assertEquals("chair, medium, on your right", result.selectedAlerts[1].message)
     }
 
     /**
@@ -431,12 +431,12 @@ class DecisionEngineTest {
 
         val chairLeft = Detection(
             classId = 56, label = "chair", confidence = 0.90f,
-            boundingBox = BoundingBox(0.05f, 0.2f, 0.25f, 0.8f),
+            boundingBox = BoundingBox(0.05f, 0.3f, 0.25f, 0.7f),
             position = HorizontalPosition.LEFT
         )
         val chairRight = Detection(
             classId = 56, label = "chair", confidence = 0.85f,
-            boundingBox = BoundingBox(0.70f, 0.2f, 0.95f, 0.8f),
+            boundingBox = BoundingBox(0.70f, 0.3f, 0.95f, 0.7f),
             position = HorizontalPosition.RIGHT
         )
         val chairLeft2 = Detection(
@@ -461,7 +461,7 @@ class DecisionEngineTest {
 
         val chairLeft = Detection(
             classId = 56, label = "chair", confidence = 0.90f,
-            boundingBox = BoundingBox(0.05f, 0.2f, 0.25f, 0.8f),
+            boundingBox = BoundingBox(0.05f, 0.3f, 0.25f, 0.7f),
             position = HorizontalPosition.LEFT
         )
 
@@ -502,7 +502,7 @@ class DecisionEngineTest {
         // First presentation at t = 2000ms
         val result1 = engine.process(listOf(cupCenter1), timestampMs = 2000L)
         assertEquals(1, result1.selectedAlerts.size)
-        assertEquals("cup ahead", result1.selectedAlerts[0].message)
+        assertEquals("cup, medium, ahead", result1.selectedAlerts[0].message)
 
         // Repeated presentation at t = 2344ms (344ms later, within 4000ms cooldown)
         val result2 = engine.process(listOf(cupCenter2), timestampMs = 2344L)
@@ -519,12 +519,12 @@ class DecisionEngineTest {
 
         val chairLeft = Detection(
             classId = 56, label = "chair", confidence = 0.90f,
-            boundingBox = BoundingBox(0.05f, 0.2f, 0.25f, 0.8f),
+            boundingBox = BoundingBox(0.05f, 0.3f, 0.25f, 0.7f),
             position = HorizontalPosition.LEFT
         )
         val chairRight = Detection(
             classId = 56, label = "chair", confidence = 0.85f,
-            boundingBox = BoundingBox(0.70f, 0.2f, 0.95f, 0.8f),
+            boundingBox = BoundingBox(0.70f, 0.3f, 0.95f, 0.7f),
             position = HorizontalPosition.RIGHT
         )
 
@@ -536,20 +536,20 @@ class DecisionEngineTest {
         val result = engine.process(listOf(chairLeft, chairRight), timestampMs = 1000L)
         assertEquals("Both distinct positions must be selected", 2, result.selectedAlerts.size)
         val messages = result.selectedAlerts.map { it.message }
-        assertTrue(messages.contains("chair on your left"))
-        assertTrue(messages.contains("chair on your right"))
+        assertTrue(messages.contains("chair, medium, on your left"))
+        assertTrue(messages.contains("chair, medium, on your right"))
         assertEquals(0, result.suppressedCount)
 
         // In subsequent frame at t = 2000ms, a new position CENTER appears
         val chairCenter = Detection(
             classId = 56, label = "chair", confidence = 0.88f,
-            boundingBox = BoundingBox(0.4f, 0.2f, 0.6f, 0.8f),
+            boundingBox = BoundingBox(0.4f, 0.3f, 0.6f, 0.7f),
             position = HorizontalPosition.CENTER
         )
         val resultNext = engine.process(listOf(chairLeft, chairRight, chairCenter), timestampMs = 2000L)
         // LEFT and RIGHT are on cooldown, but CENTER is new and eligible!
         assertEquals("New position CENTER should be selected even while LEFT and RIGHT are on cooldown", 1, resultNext.selectedAlerts.size)
-        assertEquals("chair ahead", resultNext.selectedAlerts[0].message)
+        assertEquals("chair, medium, ahead", resultNext.selectedAlerts[0].message)
         assertEquals("LEFT and RIGHT should be suppressed (2)", 2, resultNext.suppressedCount)
     }
 
@@ -584,8 +584,8 @@ class DecisionEngineTest {
         val engine = DefaultDecisionEngine(DecisionConfig(maxSelectedAlerts = 2, minimumStableObservations = 1))
 
         val rawDetections = listOf(
-            Detection(56, "chair", 0.90f, BoundingBox(0.05f, 0.2f, 0.25f, 0.8f), HorizontalPosition.LEFT),
-            Detection(56, "chair", 0.85f, BoundingBox(0.70f, 0.2f, 0.95f, 0.8f), HorizontalPosition.RIGHT),
+            Detection(56, "chair", 0.90f, BoundingBox(0.05f, 0.3f, 0.25f, 0.7f), HorizontalPosition.LEFT),
+            Detection(56, "chair", 0.85f, BoundingBox(0.70f, 0.3f, 0.95f, 0.7f), HorizontalPosition.RIGHT),
             Detection(56, "chair", 0.65f, BoundingBox(0.10f, 0.3f, 0.30f, 0.7f), HorizontalPosition.LEFT)
         )
 
@@ -611,8 +611,8 @@ class DecisionEngineTest {
         assertEquals(0.90f, uiState.detections[0].confidence, 0.001f)
 
         // Verify selected alert content
-        assertEquals("chair on your left", uiState.selectedAlerts[0].message)
-        assertEquals("chair on your right", uiState.selectedAlerts[1].message)
+        assertEquals("chair, medium, on your left", uiState.selectedAlerts[0].message)
+        assertEquals("chair, medium, on your right", uiState.selectedAlerts[1].message)
     }
 
     /**

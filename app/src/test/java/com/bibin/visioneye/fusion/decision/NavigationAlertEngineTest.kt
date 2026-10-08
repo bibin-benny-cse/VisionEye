@@ -168,7 +168,7 @@ class NavigationAlertEngineTest {
         val detFrame2 = createDetection("chair", 0.85f, centerX = 0.20f, timestampMs = 1200L)
         val result2 = engine.process(listOf(detFrame2), timestampMs = 1200L)
         assertEquals("Frame 2 (observation 2 >= 2): persistent object must emit alert", 1, result2.selectedAlerts.size)
-        assertEquals("chair on your left", result2.selectedAlerts.first().message)
+        assertEquals("chair, medium, on your left", result2.selectedAlerts.first().message)
     }
 
     // 8. transient object does not immediately alert
@@ -219,7 +219,7 @@ class NavigationAlertEngineTest {
         // Frame 1 & 2: chair on LEFT at t = 1000L
         engine.process(listOf(createDetection("chair", 0.85f, centerX = 0.20f)), timestampMs = 800L)
         val resLeft = engine.process(listOf(createDetection("chair", 0.85f, centerX = 0.20f)), timestampMs = 1000L)
-        assertEquals("chair on your left", resLeft.selectedAlerts.first().message)
+        assertEquals("chair, medium, on your left", resLeft.selectedAlerts.first().message)
 
         // Chair transitions to CENTER at t = 1400L and stabilizes at t = 1600L (well within 2500ms cooldown of LEFT alert)
         // Position change represents a new navigation state and emits after stabilization (Test 5)
@@ -232,7 +232,7 @@ class NavigationAlertEngineTest {
             1,
             resCenter2.selectedAlerts.size
         )
-        assertEquals("chair ahead", resCenter2.selectedAlerts.first().message)
+        assertEquals("chair, medium, ahead", resCenter2.selectedAlerts.first().message)
     }
 
     // 12. multiple-object deterministic selection
@@ -257,7 +257,7 @@ class NavigationAlertEngineTest {
         // Table (CENTER, obstacle priority) should be prioritized
         assertTrue(result.selectedAlerts.isNotEmpty())
         val topAlert = result.selectedAlerts.first()
-        assertEquals("table ahead", topAlert.message)
+        assertEquals("table, medium, ahead", topAlert.message)
     }
 
     // 13. priority handling
@@ -361,13 +361,13 @@ class NavigationAlertEngineTest {
     // 18. alert message formatting
     @Test
     fun test18_alertMessageFormatting() {
-        assertEquals("chair on your left", AlertMessageFormatter.format("chair", HorizontalPosition.LEFT))
-        assertEquals("chair ahead", AlertMessageFormatter.format("chair", HorizontalPosition.CENTER))
-        assertEquals("chair on your right", AlertMessageFormatter.format("chair", HorizontalPosition.RIGHT))
+        assertEquals("chair, close, on your left", AlertMessageFormatter.format("chair", HorizontalPosition.LEFT, ProximityLevel.NEAR))
+        assertEquals("chair, medium, ahead", AlertMessageFormatter.format("chair", HorizontalPosition.CENTER, ProximityLevel.MEDIUM))
+        assertEquals("chair, far, on your right", AlertMessageFormatter.format("chair", HorizontalPosition.RIGHT, ProximityLevel.FAR))
 
-        assertEquals("Chair on your left", AlertMessageFormatter.formatCapitalized("chair", HorizontalPosition.LEFT))
-        assertEquals("Person ahead", AlertMessageFormatter.formatCapitalized("person", HorizontalPosition.CENTER))
-        assertEquals("Table on your right", AlertMessageFormatter.formatCapitalized("table", HorizontalPosition.RIGHT))
+        assertEquals("Chair, close, on your left", AlertMessageFormatter.formatCapitalized("chair", HorizontalPosition.LEFT, ProximityLevel.NEAR))
+        assertEquals("Person, medium, ahead", AlertMessageFormatter.formatCapitalized("person", HorizontalPosition.CENTER, ProximityLevel.MEDIUM))
+        assertEquals("Table, far, on your right", AlertMessageFormatter.formatCapitalized("table", HorizontalPosition.RIGHT, ProximityLevel.FAR))
     }
 
     // 19. no distance values generated
@@ -390,20 +390,21 @@ class NavigationAlertEngineTest {
         }
     }
 
-    // 20. no NEAR/MEDIUM/FAR classification
+    // 20. audible coarse proximity classification ("close", "medium", "far", never raw "near")
     @Test
-    fun test20_noNearMediumFarClassification() {
+    fun test20_audibleCoarseProximityClassification() {
         val testPositions = listOf(HorizontalPosition.LEFT, HorizontalPosition.CENTER, HorizontalPosition.RIGHT)
-        val forbiddenTerms = listOf("near", "medium", "far")
 
         for (pos in testPositions) {
-            val msg = AlertMessageFormatter.format("chair", pos).lowercase()
-            for (term in forbiddenTerms) {
-                assertFalse(
-                    "Alert message '$msg' must not contain pseudo-depth term '$term'",
-                    msg.contains(term)
-                )
-            }
+            val nearMsg = AlertMessageFormatter.format("chair", pos, ProximityLevel.NEAR).lowercase()
+            assertTrue("NEAR alert must contain 'close'", nearMsg.contains("close"))
+            assertFalse("NEAR alert must not contain raw internal enum name 'near'", nearMsg.contains("near"))
+
+            val medMsg = AlertMessageFormatter.format("chair", pos, ProximityLevel.MEDIUM).lowercase()
+            assertTrue("MEDIUM alert must contain 'medium'", medMsg.contains("medium"))
+
+            val farMsg = AlertMessageFormatter.format("chair", pos, ProximityLevel.FAR).lowercase()
+            assertTrue("FAR alert must contain 'far'", farMsg.contains("far"))
         }
     }
 
@@ -489,7 +490,7 @@ class NavigationAlertEngineTest {
             fakeTts.speak(res2.selectedAlerts.first().message, SpeechPriority.NORMAL)
         }
         assertEquals("TTS triggered for stabilized selected alert", 1, fakeTts.spokenUtterances.size)
-        assertEquals("chair on your left", fakeTts.spokenUtterances.first())
+        assertEquals("chair, medium, on your left", fakeTts.spokenUtterances.first())
 
         // Frame 3: Duplicate within cooldown -> selectedAlerts is empty -> No additional TTS
         val res3 = engine.process(listOf(createDetection("chair", 0.85f, 0.20f)), timestampMs = 1400L)

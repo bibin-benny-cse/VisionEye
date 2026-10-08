@@ -263,7 +263,7 @@ class DefaultSpeechEventArbitrator(
     }
 
     private fun getSemanticKey(alert: AlertCandidate): String =
-        "${alert.className}|${alert.position.name}"
+        "${alert.className}|${alert.position.name}|${alert.proximity.name}"
 
     companion object {
         private const val TAG = "SpeechEventArbitrator"

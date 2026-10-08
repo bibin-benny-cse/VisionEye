@@ -107,7 +107,7 @@ class NavigationSpeechSynchronizationTest {
         // Frame 2: Stabilized persistent observation -> speaks exactly once
         processFrame(listOf(chairLeft), timestampMs = 1200L)
         assertEquals("Frame 2 (observation 2 >= 2): Speaks once", 1, fakeSpeech.spokenUtterances.size)
-        assertEquals("chair on your left", fakeSpeech.spokenUtterances.first())
+        assertEquals("chair, medium, on your left", fakeSpeech.spokenUtterances.first())
 
         // Frame 3: Same chair, same position -> no repeated speech
         processFrame(listOf(chairLeft), timestampMs = 1400L)
@@ -129,11 +129,11 @@ class NavigationSpeechSynchronizationTest {
         // Even though cooldown is 2500ms and 6000ms have elapsed, the continuously tracked
         // chair in unchanged position must speak ONLY ONCE.
         assertEquals("Continuously tracked chair across 30 frames must speak exactly once", 1, fakeSpeech.spokenUtterances.size)
-        assertEquals("chair on your left", fakeSpeech.spokenUtterances[0])
+        assertEquals("chair, medium, on your left", fakeSpeech.spokenUtterances[0])
     }
 
     // 3. Position change: chair LEFT changes to chair CENTER.
-    // After temporal stabilization in the new position, generate a new speech event: "chair ahead".
+    // After temporal stabilization in the new position, generate a new speech event: "chair, medium, ahead".
     @Test
     fun testDifferentPositionCreatesNewSpeechEvent() {
         val chairLeft = createDetection("chair", centerX = 0.20f)
@@ -143,7 +143,7 @@ class NavigationSpeechSynchronizationTest {
         processFrame(listOf(chairLeft), timestampMs = 1000L)
         processFrame(listOf(chairLeft), timestampMs = 1200L)
         assertEquals("Chair on LEFT speaks once", 1, fakeSpeech.spokenUtterances.size)
-        assertEquals("chair on your left", fakeSpeech.spokenUtterances[0])
+        assertEquals("chair, medium, on your left", fakeSpeech.spokenUtterances[0])
 
         // Chair transitions to CENTER
         // Frame 3: First observation in CENTER -> transient stabilization required -> no speech yet
@@ -151,12 +151,12 @@ class NavigationSpeechSynchronizationTest {
         assertNull("First frame in new position should not emit newAlertEvent", resCenter1.newAlertEvent)
         assertEquals("No speech before new position stabilizes", 1, fakeSpeech.spokenUtterances.size)
 
-        // Frame 4: Second observation in CENTER -> stabilized in CENTER -> speaks "chair ahead"
+        // Frame 4: Second observation in CENTER -> stabilized in CENTER -> speaks "chair, medium, ahead"
         val resCenter2 = processFrame(listOf(chairCenter), timestampMs = 1600L)
         assertNotNull("Stabilized in new position must emit newAlertEvent", resCenter2.newAlertEvent)
-        assertEquals("chair ahead", resCenter2.newAlertEvent?.message)
+        assertEquals("chair, medium, ahead", resCenter2.newAlertEvent?.message)
         assertEquals("New speech event emitted for position change", 2, fakeSpeech.spokenUtterances.size)
-        assertEquals("chair ahead", fakeSpeech.spokenUtterances[1])
+        assertEquals("chair, medium, ahead", fakeSpeech.spokenUtterances[1])
 
         // Frame 5: Continues in CENTER -> silent
         processFrame(listOf(chairCenter), timestampMs = 1800L)
@@ -174,7 +174,7 @@ class NavigationSpeechSynchronizationTest {
         processFrame(listOf(chairLeft), timestampMs = 1000L)
         processFrame(listOf(chairLeft), timestampMs = 1200L)
         assertEquals(1, fakeSpeech.spokenUtterances.size)
-        assertEquals("chair on your left", fakeSpeech.spokenUtterances[0])
+        assertEquals("chair, medium, on your left", fakeSpeech.spokenUtterances[0])
 
         // Table on CENTER appears while chair is still visible
         processFrame(listOf(chairLeft, tableCenter), timestampMs = 1400L)
@@ -182,7 +182,7 @@ class NavigationSpeechSynchronizationTest {
 
         // Table ahead becomes the new alert event
         assertEquals(2, fakeSpeech.spokenUtterances.size)
-        assertEquals("table ahead", fakeSpeech.spokenUtterances[1])
+        assertEquals("table, medium, ahead", fakeSpeech.spokenUtterances[1])
 
         // Frame 5: Both continue visible -> neither replays
         processFrame(listOf(chairLeft, tableCenter), timestampMs = 1800L)
@@ -257,7 +257,7 @@ class NavigationSpeechSynchronizationTest {
         processFrame(listOf(chairLeft), timestampMs = 1300L)
         processFrame(listOf(chairLeft), timestampMs = 1500L)
         assertEquals("New camera session speaks stabilized detection", 2, fakeSpeech.spokenUtterances.size)
-        assertEquals(listOf("chair on your left", "chair on your left"), fakeSpeech.spokenUtterances)
+        assertEquals(listOf("chair, medium, on your left", "chair, medium, on your left"), fakeSpeech.spokenUtterances)
     }
 
     // 9. Compose recomposition / StateFlow collection cannot trigger speech.
@@ -307,7 +307,7 @@ class NavigationSpeechSynchronizationTest {
 
         // Exactly one new alert event is emitted for the primary stabilized object (chair CENTER)
         assertEquals("Exactly one new alert event emitted despite 3 raw objects", 1, fakeSpeech.spokenUtterances.size)
-        assertEquals("chair ahead", fakeSpeech.spokenUtterances[0])
+        assertEquals("chair, medium, ahead", fakeSpeech.spokenUtterances[0])
     }
 
     /**

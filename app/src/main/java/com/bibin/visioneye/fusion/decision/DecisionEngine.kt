@@ -83,7 +83,12 @@ data class TrackedObject(
     var confidence: Float,
     var lastAlertTimestampMs: Long = 0L,
     var lastAlertPosition: HorizontalPosition? = null,
-    var lastSpokenPosition: HorizontalPosition? = null
+    var lastSpokenPosition: HorizontalPosition? = null,
+    var smoothedHeight: Float = lastBoundingBox.height,
+    var currentProximity: ProximityLevel = ProximityLevel.FAR,
+    var candidateProximity: ProximityLevel = ProximityLevel.FAR,
+    var candidateProximityObservationCount: Int = 1,
+    var lastSpokenProximity: ProximityLevel? = null
 )
 
 /**
@@ -218,6 +223,38 @@ class DefaultDecisionEngine(
                 track.confidence = matchedDet.confidence
                 track.lastSeenTimestampMs = timestampMs
                 track.observationCount++
+
+                // Exponential Moving Average (EMA) smoothing for normalized height
+                val rawHeight = matchedDet.boundingBox.height
+                val alpha = config.proximitySmoothingAlpha
+                track.smoothedHeight = alpha * rawHeight + (1f - alpha) * track.smoothedHeight
+
+                // Target proximity calculation with dual-threshold hysteresis
+                val thresholds = config.getProximityThresholds(track.className)
+                val targetProximity = ProximityEstimator.resolveWithHysteresis(
+                    smoothedHeight = track.smoothedHeight,
+                    currentProximity = track.currentProximity,
+                    thresholds = thresholds,
+                    hysteresis = config.proximityHysteresisMargin
+                )
+
+                // Temporal state persistence: require 2 consecutive observations to transition
+                if (targetProximity == track.currentProximity) {
+                    track.candidateProximity = targetProximity
+                    track.candidateProximityObservationCount = 1
+                } else {
+                    if (targetProximity == track.candidateProximity) {
+                        track.candidateProximityObservationCount++
+                        if (track.candidateProximityObservationCount >= config.proximityPersistenceObservations) {
+                            track.currentProximity = targetProximity
+                            track.candidateProximityObservationCount = 1
+                        }
+                    } else {
+                        track.candidateProximity = targetProximity
+                        track.candidateProximityObservationCount = 1
+                    }
+                }
+
                 updatedTracksInThisCycle.add(track)
             }
         }
@@ -225,6 +262,10 @@ class DefaultDecisionEngine(
         // Detections without an existing track become newly observed tracks
         for ((index, det) in validDetections.withIndex()) {
             if (!matchedDetectionIndices.contains(index)) {
+                val rawHeight = det.boundingBox.height
+                val thresholds = config.getProximityThresholds(det.className)
+                val initialProximity = ProximityEstimator.estimate(det, thresholds)
+
                 val newTrack = TrackedObject(
                     trackId = nextTrackId++,
                     className = det.className,
@@ -234,7 +275,12 @@ class DefaultDecisionEngine(
                     positionObservationCount = 1,
                     firstSeenTimestampMs = timestampMs,
                     lastSeenTimestampMs = timestampMs,
-                    confidence = det.confidence
+                    confidence = det.confidence,
+                    smoothedHeight = rawHeight,
+                    currentProximity = initialProximity,
+                    candidateProximity = initialProximity,
+                    candidateProximityObservationCount = 1,
+                    lastSpokenProximity = null
                 )
                 trackedObjects.add(newTrack)
                 updatedTracksInThisCycle.add(newTrack)
@@ -255,7 +301,7 @@ class DefaultDecisionEngine(
 
             val priority = config.getPriorityForClass(track.className)
             val priorityRank = config.getPriorityRank(track.className)
-            val message = AlertMessageFormatter.format(track.className, track.lastPosition)
+            val message = AlertMessageFormatter.format(track.className, track.lastPosition, track.currentProximity)
 
             val candidate = AlertCandidate(
                 className = track.className,
@@ -266,9 +312,10 @@ class DefaultDecisionEngine(
                 message = message,
                 timestampMs = timestampMs,
                 alertType = NavigationAlertType.fromPosition(track.lastPosition),
-                reason = "Stable observation (${track.observationCount} frames) in ${track.lastPosition.name}",
+                reason = "Stable observation (${track.observationCount} frames) in ${track.lastPosition.name} (${track.currentProximity.name})",
                 observationCount = track.observationCount,
-                trackId = track.trackId
+                trackId = track.trackId,
+                proximity = track.currentProximity
             )
             candidates.add(candidate)
         }
@@ -336,8 +383,9 @@ class DefaultDecisionEngine(
 
         // 7. Authoritative Speech Trigger: Determine NEW eligible alert events
         // Only unsuppressed selected alerts that transition into a new speech state can trigger speech.
-        // If an object is already speaking or has already been spoken in this position,
-        // it must NOT create repeated speech events while pointing at the same object.
+        // Escalation rule: Transitioning to NEAR triggers a new speech alert even in the same position.
+        // De-escalation (NEAR -> MEDIUM/FAR) remains silent.
+        // Stable NEAR does not repeatedly alert.
         val newAlerts = mutableListOf<AlertCandidate>()
         for (candidate in selected) {
             val track = trackedObjects.find { it.trackId == candidate.trackId }
@@ -351,10 +399,26 @@ class DefaultDecisionEngine(
                 lastSpokenPositions[candidate.className.lowercase()] == candidate.position
             }
 
-            if (!alreadySpokenInThisPosition) {
+            val isPositionChange = !alreadySpokenInThisPosition
+
+            // Escalation rule: Transitioning to closer proximity triggers a new speech alert
+            // - FAR -> MEDIUM: updated alert
+            // - MEDIUM -> NEAR (or FAR -> NEAR): urgent alert
+            // - Downgrades (NEAR -> MEDIUM, NEAR -> FAR, MEDIUM -> FAR): remain silent
+            val isEscalation = when {
+                candidate.proximity == ProximityLevel.NEAR && track?.lastSpokenProximity != ProximityLevel.NEAR -> true
+                candidate.proximity == ProximityLevel.MEDIUM && track?.lastSpokenProximity == ProximityLevel.FAR -> true
+                else -> false
+            }
+
+            if (isPositionChange || isEscalation) {
                 newAlerts.add(candidate)
                 track?.lastSpokenPosition = candidate.position
+                track?.lastSpokenProximity = candidate.proximity
                 lastSpokenPositions[candidate.className.lowercase()] = candidate.position
+            } else {
+                // If in same position and not escalating, track state without re-alerting
+                track?.lastSpokenProximity = candidate.proximity
             }
         }
 

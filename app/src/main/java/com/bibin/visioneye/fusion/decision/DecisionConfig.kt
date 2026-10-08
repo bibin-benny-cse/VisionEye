@@ -28,7 +28,12 @@ data class DecisionConfig(
     val trackingMaxDisplacement: Float = 0.25f,
     val objectDisappearanceTimeoutMs: Long = 1000L,
     val priorityOrder: List<String> = DEFAULT_PRIORITY_ORDER,
-    val defaultPriority: AlertPriority = AlertPriority.LOW
+    val defaultPriority: AlertPriority = AlertPriority.LOW,
+    val classProximityThresholds: Map<String, ProximityThresholds> = DEFAULT_CLASS_PROXIMITY_THRESHOLDS,
+    val defaultProximityThresholds: ProximityThresholds = DEFAULT_FALLBACK_THRESHOLDS,
+    val proximitySmoothingAlpha: Float = 0.35f,
+    val proximityHysteresisMargin: Float = 0.04f,
+    val proximityPersistenceObservations: Int = 2
 ) {
     /**
      * Computes a granular integer priority score for a class name based on [priorityOrder].
@@ -58,7 +63,47 @@ data class DecisionConfig(
         }
     }
 
+    /**
+     * Resolves the [ProximityThresholds] for a given class name.
+     */
+    fun getProximityThresholds(className: String): ProximityThresholds {
+        val canonical = normalizeClassName(className)
+        return classProximityThresholds[canonical] ?: defaultProximityThresholds
+    }
+
     companion object {
+        /**
+         * Initial engineering threshold tiers for coarse proximity estimation.
+         * Note: These represent coarse relative visual angles, NOT exact metric distances.
+         */
+        val DEFAULT_TALL_THRESHOLDS = ProximityThresholds(nearHeight = 0.60f, mediumHeight = 0.30f)
+        val DEFAULT_MEDIUM_THRESHOLDS = ProximityThresholds(nearHeight = 0.55f, mediumHeight = 0.25f)
+        val DEFAULT_SMALL_THRESHOLDS = ProximityThresholds(nearHeight = 0.38f, mediumHeight = 0.15f)
+        val DEFAULT_FALLBACK_THRESHOLDS = ProximityThresholds(nearHeight = 0.55f, mediumHeight = 0.25f)
+
+        val DEFAULT_CLASS_PROXIMITY_THRESHOLDS: Map<String, ProximityThresholds> = mapOf(
+            // Tall tier: person, door, refrigerator, stairs
+            "person" to DEFAULT_TALL_THRESHOLDS,
+            "door" to DEFAULT_TALL_THRESHOLDS,
+            "refrigerator" to DEFAULT_TALL_THRESHOLDS,
+            "stairs" to DEFAULT_TALL_THRESHOLDS,
+
+            // Medium / Furniture / Vehicle tier
+            "chair" to DEFAULT_MEDIUM_THRESHOLDS,
+            "table" to DEFAULT_MEDIUM_THRESHOLDS,
+            "bed" to DEFAULT_MEDIUM_THRESHOLDS,
+            "car" to DEFAULT_MEDIUM_THRESHOLDS,
+            "bus" to DEFAULT_MEDIUM_THRESHOLDS,
+            "truck" to DEFAULT_MEDIUM_THRESHOLDS,
+            "bicycle" to DEFAULT_MEDIUM_THRESHOLDS,
+            "motorcycle" to DEFAULT_MEDIUM_THRESHOLDS,
+
+            // Small / Low obstacle tier
+            "bag" to DEFAULT_SMALL_THRESHOLDS,
+            "book" to DEFAULT_SMALL_THRESHOLDS,
+            "cup" to DEFAULT_SMALL_THRESHOLDS
+        )
+
         /**
          * Canonical priority ordering for navigation assistance:
          * person -> door -> stairs -> vehicles -> bicycle -> motorcycle -> chair -> table -> bed -> refrigerator -> bag -> book -> cup -> others.
