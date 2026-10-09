@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bibin.visioneye.core.mode.VisionMode
+import com.bibin.visioneye.ui.theme.CurrencyGold
 import com.bibin.visioneye.ui.theme.EmergencyRed
 import com.bibin.visioneye.ui.theme.HighContrastBlack
 import com.bibin.visioneye.ui.theme.HighContrastBorder
@@ -57,6 +58,7 @@ fun MainScreen(
     onModeSelected: (VisionMode) -> Unit,
     onStartCamera: () -> Unit = {},
     onStartReadMode: () -> Unit = {},
+    onStartCurrencyMode: () -> Unit = {},
     onStartPeopleMode: () -> Unit = {},
     onSavePerson: () -> Unit = {},
     onManagePeople: () -> Unit = {},
@@ -194,6 +196,44 @@ fun MainScreen(
                         }
                     }
 
+                    // 3. Scan Currency Button (Direct entry to CURRENCY Mode)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(CurrencyGold)
+                            .border(2.dp, HighContrastWhite, RoundedCornerShape(12.dp))
+                            .clickable(onClick = onStartCurrencyMode)
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "Scan Currency. Opens camera to identify Indian rupee banknotes and announce their denomination. Double tap to activate."
+                            }
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Text(text = "💵", fontSize = 26.sp)
+                            Column {
+                                Text(
+                                    text = "SCAN CURRENCY",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = HighContrastBlack,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = "Identify Indian banknotes (₹10 - ₹500)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = HighContrastBlack.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
                     // 3. Recognize People Button (Direct entry to PEOPLE Mode Face Recognition)
                     Box(
                         modifier = Modifier
@@ -291,6 +331,7 @@ fun MainScreen(
                 mode = currentMode,
                 onStartCamera = onStartCamera,
                 onStartReadMode = onStartReadMode,
+                onStartCurrencyMode = onStartCurrencyMode,
                 onStartPeopleMode = onStartPeopleMode,
                 onSavePerson = onSavePerson,
                 onManagePeople = onManagePeople
@@ -321,6 +362,8 @@ fun MainScreen(
                     onClick = {
                         if (mode == VisionMode.READ) {
                             onStartReadMode()
+                        } else if (mode == VisionMode.CURRENCY) {
+                            onStartCurrencyMode()
                         } else if (mode == VisionMode.PEOPLE) {
                             onStartPeopleMode()
                         } else if (mode == VisionMode.NAVIGATE) {
@@ -346,6 +389,7 @@ private fun ActiveModeBanner(
     mode: VisionMode,
     onStartCamera: () -> Unit,
     onStartReadMode: () -> Unit = {},
+    onStartCurrencyMode: () -> Unit = {},
     onStartPeopleMode: () -> Unit = {},
     onSavePerson: () -> Unit = {},
     onManagePeople: () -> Unit = {},
@@ -446,6 +490,39 @@ private fun ActiveModeBanner(
                         Text(text = "📖", fontSize = 22.sp)
                         Text(
                             text = "START READING (CAMERA)",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = HighContrastBlack,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+            }
+
+            // Direct camera currency scanning button when in CURRENCY mode
+            if (mode == VisionMode.CURRENCY) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(58.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(CurrencyGold)
+                        .border(2.dp, HighContrastWhite, RoundedCornerShape(12.dp))
+                        .clickable(onClick = onStartCurrencyMode)
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = "Start currency scanning. Opens camera to identify Indian rupee banknotes and announce value. Double tap to start."
+                        }
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(text = "💵", fontSize = 22.sp)
+                        Text(
+                            text = "START CURRENCY SCANNER",
                             style = MaterialTheme.typography.titleMedium,
                             color = HighContrastBlack,
                             fontWeight = FontWeight.ExtraBold
@@ -714,6 +791,7 @@ private fun getModeAccentColor(mode: VisionMode): Color {
     return when (mode) {
         VisionMode.NAVIGATE -> NavigateBlue
         VisionMode.READ -> ReadGreen
+        VisionMode.CURRENCY -> CurrencyGold
         VisionMode.PEOPLE -> PeoplePurple
         VisionMode.NAVIGATION -> NavigationTeal
         VisionMode.SOS -> EmergencyRed

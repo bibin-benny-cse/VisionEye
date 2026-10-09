@@ -11,3 +11,4 @@ app/build/
 .vscode/
 ml/
 app/src/main/assets/models/currency_yolov8n.tflite
+/best.tflite

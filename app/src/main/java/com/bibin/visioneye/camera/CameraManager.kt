@@ -22,6 +22,8 @@ import com.bibin.visioneye.ai.YoloDebugState
 import com.bibin.visioneye.ai.YoloFrameAnalyzer
 import com.bibin.visioneye.ai.YoloV8Detector
 import com.bibin.visioneye.core.mode.VisionMode
+import com.bibin.visioneye.currency.CurrencyCoordinator
+import com.bibin.visioneye.currency.CurrencyState
 import com.bibin.visioneye.people.PeopleCoordinator
 import com.bibin.visioneye.people.PeopleState
 import com.bibin.visioneye.read.ReadCoordinator
@@ -74,6 +76,9 @@ class CameraManager(
     val readCoordinator = ReadCoordinator(speechController = speechController)
     override val readState: StateFlow<ReadState> = readCoordinator.readState
 
+    val currencyCoordinator = CurrencyCoordinator(context, speechController = speechController)
+    override val currencyState: StateFlow<CurrencyState> = currencyCoordinator.currencyState
+
     override val peopleRepository: com.bibin.visioneye.people.PeopleRepository =
         com.bibin.visioneye.people.LocalFilePeopleRepository(context.filesDir)
 
@@ -108,6 +113,7 @@ class CameraManager(
         _isEnrollmentActive = true
         yoloAnalyzer.reset()
         readCoordinator.deactivate()
+        currencyCoordinator.deactivate()
         peopleCoordinator.deactivate()
         enrollmentCoordinator.startEnrollment(name)
         setFrameAnalyzer(enrollmentCoordinator.frameAnalyzer)
@@ -126,6 +132,10 @@ class CameraManager(
             VisionMode.PEOPLE -> {
                 peopleCoordinator.activate()
                 setFrameAnalyzer(peopleCoordinator.frameAnalyzer)
+            }
+            VisionMode.CURRENCY -> {
+                currencyCoordinator.activate()
+                setFrameAnalyzer(currencyCoordinator.frameAnalyzer)
             }
             else -> clearFrameAnalyzer()
         }
@@ -242,6 +252,10 @@ class CameraManager(
                             peopleCoordinator.activate()
                             setFrameAnalyzer(peopleCoordinator.frameAnalyzer)
                         }
+                        VisionMode.CURRENCY -> {
+                            currencyCoordinator.activate()
+                            setFrameAnalyzer(currencyCoordinator.frameAnalyzer)
+                        }
                         else -> clearFrameAnalyzer()
                     }
                 }
@@ -270,6 +284,7 @@ class CameraManager(
             clearFrameAnalyzer()
             yoloAnalyzer.reset()
             readCoordinator.deactivate()
+            currencyCoordinator.deactivate()
             peopleCoordinator.deactivate()
 
             imageAnalysis?.clearAnalyzer()
@@ -308,6 +323,7 @@ class CameraManager(
             clearFrameAnalyzer()
             yoloAnalyzer.reset()
             readCoordinator.deactivate()
+            currencyCoordinator.deactivate()
             peopleCoordinator.deactivate()
 
             imageAnalysis?.clearAnalyzer()
@@ -393,25 +409,36 @@ class CameraManager(
             VisionMode.NAVIGATE -> {
                 readCoordinator.deactivate()
                 peopleCoordinator.deactivate()
+                currencyCoordinator.deactivate()
                 setFrameAnalyzer(yoloAnalyzer)
             }
             VisionMode.READ -> {
                 yoloAnalyzer.reset()
                 peopleCoordinator.deactivate()
+                currencyCoordinator.deactivate()
                 readCoordinator.activate()
                 setFrameAnalyzer(readCoordinator.frameAnalyzer)
             }
             VisionMode.PEOPLE -> {
                 yoloAnalyzer.reset()
                 readCoordinator.deactivate()
+                currencyCoordinator.deactivate()
                 peopleCoordinator.activate()
                 setFrameAnalyzer(peopleCoordinator.frameAnalyzer)
+            }
+            VisionMode.CURRENCY -> {
+                yoloAnalyzer.reset()
+                readCoordinator.deactivate()
+                peopleCoordinator.deactivate()
+                currencyCoordinator.activate()
+                setFrameAnalyzer(currencyCoordinator.frameAnalyzer)
             }
             else -> {
                 clearFrameAnalyzer()
                 yoloAnalyzer.reset()
                 readCoordinator.deactivate()
                 peopleCoordinator.deactivate()
+                currencyCoordinator.deactivate()
             }
         }
 
@@ -428,6 +455,7 @@ class CameraManager(
         stopCamera()
         objectDetector.close()
         readCoordinator.release()
+        currencyCoordinator.release()
         peopleCoordinator.release()
         faceDetector.close()
         embeddingModel.close()

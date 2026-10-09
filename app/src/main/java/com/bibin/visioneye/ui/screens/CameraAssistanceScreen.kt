@@ -62,8 +62,12 @@ import com.bibin.visioneye.ai.PreviewCoordinateMapper
 import com.bibin.visioneye.camera.CameraController
 import com.bibin.visioneye.camera.CameraState
 import com.bibin.visioneye.core.mode.VisionMode
+import com.bibin.visioneye.currency.CurrencyDenomination
+import com.bibin.visioneye.currency.CurrencyState
 import com.bibin.visioneye.fusion.decision.AlertCandidate
 import com.bibin.visioneye.people.PeopleState
+import com.bibin.visioneye.ui.theme.CurrencyGold
+import com.bibin.visioneye.ui.theme.EmergencyRed
 import com.bibin.visioneye.ui.theme.HighContrastBlack
 import com.bibin.visioneye.ui.theme.HighContrastBorder
 import com.bibin.visioneye.ui.theme.HighContrastCard
@@ -97,6 +101,7 @@ fun CameraAssistanceScreen(
     val diagnostics by cameraController.diagnostics.collectAsState()
     val yoloState by cameraController.yoloState.collectAsState()
     val peopleState by cameraController.peopleState.collectAsState()
+    val currencyState by cameraController.currencyState.collectAsState()
 
     var showDebugOverlay by remember {
         mutableStateOf(true) // Development-only bounding-box overlay active in dev
@@ -165,7 +170,7 @@ fun CameraAssistanceScreen(
                     }
                 )
 
-                // 2. Development-only Bounding-Box Overlay (NAVIGATE and PEOPLE modes)
+                // 2. Development-only Bounding-Box Overlay (NAVIGATE, CURRENCY, and PEOPLE modes)
                 if (showDebugOverlay) {
                     if (currentMode == VisionMode.NAVIGATE && yoloState.isReady && yoloState.detections.isNotEmpty()) {
                         DetectionOverlay(
@@ -173,6 +178,12 @@ fun CameraAssistanceScreen(
                             streamWidth = diagnostics.imageWidth,
                             streamHeight = diagnostics.imageHeight,
                             selectedAlerts = yoloState.selectedAlerts
+                        )
+                    } else if (currentMode == VisionMode.CURRENCY && currencyState.isReady && currencyState.detections.isNotEmpty()) {
+                        DetectionOverlay(
+                            detections = currencyState.detections.map { it.toGenericDetection() },
+                            streamWidth = diagnostics.imageWidth,
+                            streamHeight = diagnostics.imageHeight
                         )
                     } else if (currentMode == VisionMode.PEOPLE && peopleState.detections.isNotEmpty()) {
                         DetectionOverlay(
@@ -207,6 +218,7 @@ fun CameraAssistanceScreen(
                         diagnostics = diagnostics,
                         yoloState = yoloState,
                         peopleState = peopleState,
+                        currencyState = currencyState,
                         showDebugOverlay = showDebugOverlay,
                         onToggleOverlay = { showDebugOverlay = !showDebugOverlay }
                     )
@@ -266,6 +278,7 @@ private fun TopBarControls(
 
         // Mode and Live Status Badge
         val badgeBorderColor = when (currentMode) {
+            VisionMode.CURRENCY -> CurrencyGold
             VisionMode.PEOPLE -> PeoplePurple
             VisionMode.READ -> ReadGreen
             else -> NavigateBlue
@@ -316,6 +329,7 @@ private fun BottomStatusOverlay(
     diagnostics: com.bibin.visioneye.camera.FrameAnalysisDiagnostics,
     yoloState: com.bibin.visioneye.ai.YoloDebugState,
     peopleState: PeopleState = PeopleState(),
+    currencyState: CurrencyState = CurrencyState(),
     showDebugOverlay: Boolean = true,
     onToggleOverlay: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -374,10 +388,10 @@ private fun BottomStatusOverlay(
                 )
             } else {
                 Text(
-                    text = if (currentMode == VisionMode.PEOPLE) {
-                        "Scanning forward path for saved people using on-device face recognition."
-                    } else {
-                        "Scanning forward path. Obstacle detection pipeline connected."
+                    text = when (currentMode) {
+                        VisionMode.PEOPLE -> "Scanning forward path for saved people using on-device face recognition."
+                        VisionMode.CURRENCY -> "Scanning for Indian banknotes using on-device YOLO11n."
+                        else -> "Scanning forward path. Obstacle detection pipeline connected."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = HighContrastWhite
@@ -511,6 +525,90 @@ private fun BottomStatusOverlay(
                                         text = yoloState.statusMessage,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = HighContrastTextMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Development & Status Display (CURRENCY mode)
+                    if (currentMode == VisionMode.CURRENCY) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(HighContrastCard, RoundedCornerShape(8.dp))
+                                .border(1.dp, CurrencyGold.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                .padding(12.dp)
+                                .semantics {
+                                    contentDescription = "Currency recognition active. Status: ${currencyState.statusMessage}"
+                                }
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "CURRENCY SCANNER ACTIVE",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = CurrencyGold,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (currencyState.isReady) {
+                                            Text(
+                                                text = if (currencyState.isConfirmed) "CONFIRMED" else "SCANNING...",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (currencyState.isConfirmed) ReadGreen else HighContrastYellow,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        } else {
+                                            Text(
+                                                text = currencyState.statusMessage,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = HighContrastYellow,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Text(
+                                    text = currencyState.statusMessage,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = if (currencyState.isConfirmed) ReadGreen else HighContrastYellow,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                if (currencyState.isConfirmed && currencyState.confirmedDenominations.isNotEmpty()) {
+                                    val summary = CurrencyDenomination.formatSpokenAnnouncement(currencyState.confirmedDenominations)
+                                    Text(
+                                        text = "$summary confirmed in camera view",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = HighContrastWhite,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Hold Indian banknote (₹10 - ₹500) flat in front of camera. On-device YOLO11n verifies notes across frames.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = HighContrastTextMuted
+                                    )
+                                }
+
+                                if (currencyState.detections.isNotEmpty()) {
+                                    val detectionLabels = currencyState.detections.joinToString { det ->
+                                        "${det.spokenName} (${(det.confidence * 100).toInt()}%)"
+                                    }
+                                    Text(
+                                        text = "Notes in view: $detectionLabels",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = HighContrastCyan
                                     )
                                 }
                             }

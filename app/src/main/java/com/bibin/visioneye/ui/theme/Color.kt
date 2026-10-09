@@ -20,5 +20,6 @@ val EmergencyRedLight = Color(0xFFFF5252)
 // Mode specific accent indicators
 val NavigateBlue = Color(0xFF2979FF)
 val ReadGreen = Color(0xFF00E676)
+val CurrencyGold = Color(0xFFFFB300)
 val PeoplePurple = Color(0xFFD500F9)
 val NavigationTeal = Color(0xFF1DE9B6)

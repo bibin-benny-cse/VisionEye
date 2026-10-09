@@ -54,6 +54,12 @@ interface CameraController : ModeAwareComponent {
         get() = kotlinx.coroutines.flow.MutableStateFlow(com.bibin.visioneye.read.ReadState.Searching)
 
     /**
+     * Observable stream of CURRENCY mode state.
+     */
+    val currencyState: StateFlow<com.bibin.visioneye.currency.CurrencyState>
+        get() = kotlinx.coroutines.flow.MutableStateFlow(com.bibin.visioneye.currency.CurrencyState())
+
+    /**
      * Observable stream of PEOPLE mode state.
      */
     val peopleState: StateFlow<com.bibin.visioneye.people.PeopleState>
@@ -106,12 +112,13 @@ interface CameraController : ModeAwareComponent {
     fun checkCameraPermission(): Boolean
 
     /**
-     * Modes that require camera frames: NAVIGATE, READ, PEOPLE.
+     * Modes that require camera frames: NAVIGATE, READ, CURRENCY, PEOPLE.
      */
     override val supportedModes: Set<VisionMode>
         get() = setOf(
             VisionMode.NAVIGATE,
             VisionMode.READ,
+            VisionMode.CURRENCY,
             VisionMode.PEOPLE
         )
 

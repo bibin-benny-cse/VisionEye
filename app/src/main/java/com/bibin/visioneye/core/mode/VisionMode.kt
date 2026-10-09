@@ -52,6 +52,23 @@ enum class VisionMode(
     ),
 
     /**
+     * Indian banknote denomination recognition mode.
+     * Voice command: "Currency"
+     * Pipeline: Camera -> Currency Recognition Model -> Denomination -> Text-to-Speech
+     */
+    CURRENCY(
+        displayName = "Currency",
+        description = "Indian banknote denomination recognition",
+        announcement = "Currency mode active. Hold banknote in camera view.",
+        requiresCamera = true,
+        requiresLocation = false,
+        requiresHighFrequencyAi = true,
+        voiceCommands = listOf("Currency"),
+        sampleAlerts = listOf("10 rupee note.", "500 rupee note."),
+        pipelineDescription = "Camera -> Currency Recognition Model -> Denomination -> Text-to-Speech"
+    ),
+
+    /**
      * Facial recognition mode for identifying registered contacts and familiar faces.
      * Voice command: "Who is this?"
      * Pipeline: Camera -> face detection -> face embedding -> local registered-person comparison -> Text-to-Speech

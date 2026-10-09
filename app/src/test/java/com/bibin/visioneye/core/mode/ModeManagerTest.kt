@@ -23,7 +23,7 @@ class ModeManagerTest {
 
     @Test
     fun allExpectedModesExist() {
-        val expectedModes = setOf("NAVIGATE", "READ", "PEOPLE", "NAVIGATION", "SOS")
+        val expectedModes = setOf("NAVIGATE", "READ", "CURRENCY", "PEOPLE", "NAVIGATION", "SOS")
         val actualModes = VisionMode.entries.map { it.name }.toSet()
         assertEquals(expectedModes, actualModes)
     }
@@ -80,6 +80,11 @@ class ModeManagerTest {
         // READ requires camera for OCR, but not location or high frequency AI
         assertTrue(VisionMode.READ.requiresCamera)
         assertFalse(VisionMode.READ.requiresHighFrequencyAi)
+
+        // CURRENCY requires camera and high frequency AI, but not location
+        assertTrue(VisionMode.CURRENCY.requiresCamera)
+        assertTrue(VisionMode.CURRENCY.requiresHighFrequencyAi)
+        assertFalse(VisionMode.CURRENCY.requiresLocation)
 
         // NAVIGATION requires GPS, not camera
         assertTrue(VisionMode.NAVIGATION.requiresLocation)

@@ -42,12 +42,14 @@ class CameraControllerTest {
         val expectedModes = setOf(
             VisionMode.NAVIGATE,
             VisionMode.READ,
+            VisionMode.CURRENCY,
             VisionMode.PEOPLE
         )
 
         assertEquals(expectedModes, controller.supportedModes)
         assertTrue(controller.isEnabledFor(VisionMode.NAVIGATE))
         assertTrue(controller.isEnabledFor(VisionMode.READ))
+        assertTrue(controller.isEnabledFor(VisionMode.CURRENCY))
         assertTrue(controller.isEnabledFor(VisionMode.PEOPLE))
         assertFalse(controller.isEnabledFor(VisionMode.NAVIGATION))
         assertFalse(controller.isEnabledFor(VisionMode.SOS))

@@ -100,6 +100,10 @@ fun VisionEyeApp(
                         modeManager.setMode(VisionMode.READ)
                         isCameraActive = true
                     },
+                    onStartCurrencyMode = {
+                        modeManager.setMode(VisionMode.CURRENCY)
+                        isCameraActive = true
+                    },
                     onStartPeopleMode = {
                         modeManager.setMode(VisionMode.PEOPLE)
                         isCameraActive = true
