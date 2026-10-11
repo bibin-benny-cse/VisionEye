@@ -160,4 +160,14 @@ interface CameraController : ModeAwareComponent {
      * Removes the currently registered frame analyzer.
      */
     fun clearFrameAnalyzer()
+
+    /**
+     * Resets OCR reading to search for a new document in READ mode.
+     */
+    fun scanAgain() {}
+
+    /**
+     * Triggers immediate manual page capture and OCR fallback in READ mode.
+     */
+    fun capturePageNow() {}
 }

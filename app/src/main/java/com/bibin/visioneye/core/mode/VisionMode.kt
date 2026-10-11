@@ -19,20 +19,20 @@ enum class VisionMode(
     val pipelineDescription: String = ""
 ) {
     /**
-     * Default mode for real-time obstacle detection, depth estimation, and path clearance.
+     * Default mode for real-time obstacle detection, relative proximity estimation, and path clearance.
      * Input: Camera frames
      * Output: Short prioritized voice alerts
      */
     NAVIGATE(
         displayName = "Navigate",
-        description = "Obstacle detection, depth estimation, and path analysis",
-        announcement = "Navigate mode active. Scanning path for obstacles.",
+        description = "Obstacle detection, relative proximity, and directional alerts",
+        announcement = "Navigate mode active. Scanning path for obstacles. Point camera forward.",
         requiresCamera = true,
         requiresLocation = false,
         requiresHighFrequencyAi = true,
         voiceCommands = listOf("Navigate", "Explore"),
         sampleAlerts = listOf("Person ahead.", "Vehicle on your left.", "Obstacle close."),
-        pipelineDescription = "Camera frames -> Object detection + Depth estimation + Path analysis -> Short prioritized voice alerts"
+        pipelineDescription = "Camera frames -> Object detection + Proximity estimation + Path analysis -> Short prioritized voice alerts"
     ),
 
     /**
@@ -43,7 +43,7 @@ enum class VisionMode(
     READ(
         displayName = "Read",
         description = "Text recognition and document reading (OCR)",
-        announcement = "Read mode active. Align text within camera view.",
+        announcement = "Read mode active. Align printed text in camera view to read aloud.",
         requiresCamera = true,
         requiresLocation = false,
         requiresHighFrequencyAi = false,
@@ -59,7 +59,7 @@ enum class VisionMode(
     CURRENCY(
         displayName = "Currency",
         description = "Indian banknote denomination recognition",
-        announcement = "Currency mode active. Hold banknote in camera view.",
+        announcement = "Currency mode active. Hold banknote flat in camera view to identify denomination.",
         requiresCamera = true,
         requiresLocation = false,
         requiresHighFrequencyAi = true,
@@ -76,7 +76,7 @@ enum class VisionMode(
     PEOPLE(
         displayName = "People",
         description = "Registered face recognition",
-        announcement = "People mode active. Scanning for familiar faces.",
+        announcement = "People mode active. Scanning for familiar faces. Point camera toward the person.",
         requiresCamera = true,
         requiresLocation = false,
         requiresHighFrequencyAi = true,
@@ -93,7 +93,7 @@ enum class VisionMode(
     NAVIGATION(
         displayName = "Navigation",
         description = "GPS navigation and wayfinding",
-        announcement = "Navigation mode active. Acquiring GPS location.",
+        announcement = "Navigation mode active. Acquiring GPS signal. Enter destination to start walking route.",
         requiresCamera = false,
         requiresLocation = true,
         requiresHighFrequencyAi = false,
@@ -109,7 +109,7 @@ enum class VisionMode(
     SOS(
         displayName = "SOS",
         description = "Emergency alert and location sharing",
-        announcement = "Emergency SOS mode active. Alerting emergency contacts.",
+        announcement = "Emergency SOS mode active. Tap Trigger SOS to begin emergency countdown.",
         requiresCamera = false,
         requiresLocation = true,
         requiresHighFrequencyAi = false,

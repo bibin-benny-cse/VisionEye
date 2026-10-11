@@ -38,10 +38,10 @@ class ReadingOrderOrganizer {
      * @return Cleanly ordered, line-preserved English text string.
      */
     fun organize(lines: List<RecognizedLine>): String {
-        // 1. Clean individual lines: trim and normalize internal repeated whitespace
+        // 1. Clean individual lines: trim, normalize internal whitespace, and filter pure layout artifacts
         val cleanedLines = lines.mapNotNull { line ->
             val normalized = line.text.replace(Regex("\\s+"), " ").trim()
-            if (normalized.isNotEmpty()) {
+            if (normalized.isNotEmpty() && !isLayoutArtifact(normalized)) {
                 line.copy(text = normalized)
             } else {
                 null
@@ -84,6 +84,15 @@ class ReadingOrderOrganizer {
     }
 
     /**
+     * Checks if a line consists entirely of non-alphanumeric layout artifacts
+     * (e.g. line dividers, bullets, standalone tildes or vertical bars).
+     * Strictly preserves single-letter words ("a", "A", "I") and single digits.
+     */
+    internal fun isLayoutArtifact(text: String): Boolean {
+        return text.all { !it.isLetterOrDigit() }
+    }
+
+    /**
      * Orders lines within a single column:
      * Groups lines into visual horizontal rows, sorts rows top-to-bottom,
      * and sorts elements within each row left-to-right.
@@ -99,7 +108,7 @@ class ReadingOrderOrganizer {
         val rows = mutableListOf<MutableList<RecognizedLine>>()
 
         for (line in sortedByTop) {
-            val matchingRow = rows.lastOrNull { row ->
+            val matchingRow = rows.findLast { row ->
                 val rowTop = row.minOf { it.top }
                 val rowBottom = row.maxOf { it.bottom }
                 val rowHeight = max(1f, rowBottom - rowTop)

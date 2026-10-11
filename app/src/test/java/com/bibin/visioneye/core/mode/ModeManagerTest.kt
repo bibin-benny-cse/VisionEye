@@ -94,4 +94,27 @@ class ModeManagerTest {
         assertTrue(VisionMode.SOS.requiresLocation)
         assertFalse(VisionMode.SOS.requiresCamera)
     }
+
+    @Test
+    fun modeEntryAnnouncements_areConsistentConciseAndUniqueAcrossAllModes() {
+        val announcements = VisionMode.entries.map { it.announcement }
+
+        // All 6 modes must have announcements
+        assertEquals(6, announcements.size)
+
+        // Announcements must be unique across modes
+        val uniqueAnnouncements = announcements.toSet()
+        assertEquals(6, uniqueAnnouncements.size)
+
+        // Every mode announcement must state the active mode, purpose, and guidance
+        VisionMode.entries.forEach { mode ->
+            val text = mode.announcement
+            assertTrue("Mode ${mode.name} announcement must not be blank", text.isNotBlank())
+            assertTrue(
+                "Mode ${mode.name} announcement must state mode name",
+                text.contains(mode.displayName, ignoreCase = true) || text.contains(mode.name, ignoreCase = true)
+            )
+            assertTrue("Mode ${mode.name} announcement must provide guidance", text.contains("active", ignoreCase = true))
+        }
+    }
 }

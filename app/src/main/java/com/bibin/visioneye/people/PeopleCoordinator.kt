@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.camera.core.ImageProxy
 import com.bibin.visioneye.camera.FrameAnalyzer
+import com.bibin.visioneye.core.mode.VisionMode
 import com.bibin.visioneye.speech.SpeechController
 import com.bibin.visioneye.speech.SpeechPriority
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -168,6 +169,7 @@ class PeopleCoordinator(
             status = PeopleScanStatus.LOOKING_FOR_PEOPLE,
             isActive = true
         )
+        speechController?.announceMode(VisionMode.PEOPLE)
         Log.d(TAG, "PeopleCoordinator activated.")
     }
 

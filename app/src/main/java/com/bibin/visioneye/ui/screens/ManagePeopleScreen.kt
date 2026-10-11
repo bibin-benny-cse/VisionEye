@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -97,17 +98,28 @@ fun ManagePeopleScreen(
                         .clickable(onClick = onBack)
                         .semantics {
                             role = Role.Button
-                            contentDescription = "Back to main menu. Double tap to activate."
+                            contentDescription = "Back to main menu"
                         }
                         .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "◀ BACK",
-                        color = HighContrastYellow,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "◀",
+                            color = HighContrastYellow,
+                            fontSize = 14.sp,
+                            modifier = Modifier.semantics { hideFromAccessibility() }
+                        )
+                        Text(
+                            text = "BACK",
+                            color = HighContrastYellow,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    }
                 }
 
                 Text(
@@ -131,12 +143,22 @@ fun ManagePeopleScreen(
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "🔒 On-Device Privacy Guaranteed",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = PeoplePurple,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "🔒",
+                            fontSize = 14.sp,
+                            modifier = Modifier.semantics { hideFromAccessibility() }
+                        )
+                        Text(
+                            text = "On-Device Privacy Guaranteed",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = PeoplePurple,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     Text(
                         text = "All face vectors and names are stored locally on this phone. No biometric data is ever sent to external cloud servers.",
                         style = MaterialTheme.typography.bodySmall,
@@ -156,17 +178,28 @@ fun ManagePeopleScreen(
                     .clickable(onClick = onAddNewPerson)
                     .semantics {
                         role = Role.Button
-                        contentDescription = "Enroll new person. Opens camera to capture and save a new face. Double tap to activate."
+                        contentDescription = "Enroll new person. Opens camera to capture and save a new face"
                     }
                     .padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "➕ ENROLL NEW PERSON",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = HighContrastWhite,
-                    fontWeight = FontWeight.ExtraBold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "➕",
+                        fontSize = 18.sp,
+                        color = HighContrastWhite,
+                        modifier = Modifier.semantics { hideFromAccessibility() }
+                    )
+                    Text(
+                        text = "ENROLL NEW PERSON",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = HighContrastWhite,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
             }
 
             if (peopleList.isEmpty()) {
@@ -180,7 +213,11 @@ fun ManagePeopleScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(text = "👥", fontSize = 48.sp)
+                        Text(
+                            text = "👥",
+                            fontSize = 48.sp,
+                            modifier = Modifier.semantics { hideFromAccessibility() }
+                        )
                         Text(
                             text = "No saved people yet.",
                             style = MaterialTheme.typography.titleMedium,
@@ -337,13 +374,14 @@ private fun SavedPersonItem(
                     .clickable(onClick = onDelete)
                     .semantics {
                         role = Role.Button
-                        contentDescription = "Delete ${person.name}. Double tap to confirm deletion."
+                        contentDescription = "Delete ${person.name}"
                     },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "🗑️",
-                    fontSize = 20.sp
+                    fontSize = 20.sp,
+                    modifier = Modifier.semantics { hideFromAccessibility() }
                 )
             }
         }

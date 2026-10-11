@@ -22,18 +22,25 @@ data class StabilityResult(
  * Prevents triggering high-resolution captures while the user is actively
  * repositioning the phone or while the camera is shaking.
  *
- * @property requiredStableFrames Number of consecutive stable frames required (default: 4 frames ~ 800ms at 5 FPS).
- * @property maxCenterDrift Maximum permissible horizontal or vertical center drift as a fraction of image dimensions (default: 0.05 = 5%).
- * @property maxAreaVariation Maximum permissible relative area variation between frames (default: 0.12 = 12%).
+ * @property requiredStableFrames Number of consecutive stable frames required (default: 2 frames ~ 200-400ms at 5 FPS).
+ * @property maxCenterDrift Maximum permissible horizontal or vertical center drift as a fraction of image dimensions (default: 0.08 = 8%).
+ * @property maxAreaVariation Maximum permissible relative area variation between frames (default: 0.18 = 18%).
  */
 class PageStabilityTracker(
-    val requiredStableFrames: Int = 4,
-    val maxCenterDrift: Float = 0.05f,
-    val maxAreaVariation: Float = 0.12f
+    val requiredStableFrames: Int = 2,
+    val maxCenterDrift: Float = 0.08f,
+    val maxAreaVariation: Float = 0.18f
 ) {
     var stableCount: Int = 0
         private set
 
+    /**
+     * Total elapsed stabilization time in milliseconds from first candidate frame to stable lock.
+     */
+    var stabilizationDurationMs: Long = 0L
+        private set
+
+    private var stabilityStartTimeMs: Long = 0L
     private var referencePage: DetectedPage? = null
 
     /**
@@ -46,6 +53,8 @@ class PageStabilityTracker(
         if (page == null) {
             stableCount = 0
             referencePage = null
+            stabilityStartTimeMs = 0L
+            stabilizationDurationMs = 0L
             return StabilityResult(isStable = false, progress = 0.0f, page = null)
         }
 
@@ -54,9 +63,15 @@ class PageStabilityTracker(
             // First candidate frame
             referencePage = page
             stableCount = 1
+            stabilityStartTimeMs = System.currentTimeMillis()
+            stabilizationDurationMs = 0L
             val progress = (1.0f / requiredStableFrames).coerceIn(0.0f, 1.0f)
+            val isStable = stableCount >= requiredStableFrames
+            if (isStable) {
+                stabilizationDurationMs = System.currentTimeMillis() - stabilityStartTimeMs
+            }
             return StabilityResult(
-                isStable = stableCount >= requiredStableFrames,
+                isStable = isStable,
                 progress = progress,
                 page = page
             )
@@ -87,10 +102,15 @@ class PageStabilityTracker(
             // Motion broke stability; restart stability tracking with current candidate
             stableCount = 1
             referencePage = page
+            stabilityStartTimeMs = System.currentTimeMillis()
+            stabilizationDurationMs = 0L
         }
 
         val progress = (stableCount.toFloat() / requiredStableFrames).coerceIn(0.0f, 1.0f)
         val isStable = stableCount >= requiredStableFrames
+        if (isStable && stabilizationDurationMs == 0L && stabilityStartTimeMs > 0L) {
+            stabilizationDurationMs = System.currentTimeMillis() - stabilityStartTimeMs
+        }
 
         return StabilityResult(
             isStable = isStable,
@@ -105,5 +125,7 @@ class PageStabilityTracker(
     fun reset() {
         stableCount = 0
         referencePage = null
+        stabilityStartTimeMs = 0L
+        stabilizationDurationMs = 0L
     }
 }

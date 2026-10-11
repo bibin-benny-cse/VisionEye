@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -100,6 +101,7 @@ fun CameraAssistanceScreen(
     val cameraState by cameraController.state.collectAsState()
     val diagnostics by cameraController.diagnostics.collectAsState()
     val yoloState by cameraController.yoloState.collectAsState()
+    val readState by cameraController.readState.collectAsState()
     val peopleState by cameraController.peopleState.collectAsState()
     val currencyState by cameraController.currencyState.collectAsState()
 
@@ -217,10 +219,13 @@ fun CameraAssistanceScreen(
                         cameraState = cameraState,
                         diagnostics = diagnostics,
                         yoloState = yoloState,
+                        readState = readState,
                         peopleState = peopleState,
                         currencyState = currencyState,
                         showDebugOverlay = showDebugOverlay,
-                        onToggleOverlay = { showDebugOverlay = !showDebugOverlay }
+                        onToggleOverlay = { showDebugOverlay = !showDebugOverlay },
+                        onScanAgain = { cameraController.scanAgain() },
+                        onCapturePageNow = { cameraController.capturePageNow() }
                     )
                 }
             }
@@ -265,7 +270,8 @@ private fun TopBarControls(
                     text = "◀",
                     color = HighContrastYellow,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize = 18.sp,
+                    modifier = Modifier.semantics { hideFromAccessibility() }
                 )
                 Text(
                     text = "STOP CAMERA",
@@ -328,10 +334,13 @@ private fun BottomStatusOverlay(
     cameraState: CameraState,
     diagnostics: com.bibin.visioneye.camera.FrameAnalysisDiagnostics,
     yoloState: com.bibin.visioneye.ai.YoloDebugState,
+    readState: com.bibin.visioneye.read.ReadState = com.bibin.visioneye.read.ReadState.Searching,
     peopleState: PeopleState = PeopleState(),
     currencyState: CurrencyState = CurrencyState(),
     showDebugOverlay: Boolean = true,
     onToggleOverlay: () -> Unit = {},
+    onScanAgain: () -> Unit = {},
+    onCapturePageNow: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -391,6 +400,7 @@ private fun BottomStatusOverlay(
                     text = when (currentMode) {
                         VisionMode.PEOPLE -> "Scanning forward path for saved people using on-device face recognition."
                         VisionMode.CURRENCY -> "Scanning for Indian banknotes using on-device YOLO11n."
+                        VisionMode.READ -> "Scanning for printed text and documents using on-device OCR."
                         else -> "Scanning forward path. Obstacle detection pipeline connected."
                     },
                     style = MaterialTheme.typography.bodyMedium,
@@ -443,6 +453,10 @@ private fun BottomStatusOverlay(
                                                     .background(if (showDebugOverlay) HighContrastYellow else HighContrastSurface)
                                                     .border(1.dp, HighContrastBorder, RoundedCornerShape(6.dp))
                                                     .clickable { onToggleOverlay() }
+                                                    .semantics {
+                                                        role = Role.Button
+                                                        contentDescription = "Toggle detection bounding boxes. Currently ${if (showDebugOverlay) "on" else "off"}"
+                                                    }
                                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                                             ) {
                                                 Text(
@@ -526,6 +540,191 @@ private fun BottomStatusOverlay(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = HighContrastTextMuted
                                     )
+                                }
+                            }
+                        }
+                    }
+
+                    // Development & Status Display (READ mode)
+                    if (currentMode == VisionMode.READ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(HighContrastCard, RoundedCornerShape(8.dp))
+                                .border(1.dp, ReadGreen.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                .padding(12.dp)
+                                .semantics {
+                                    val stateMsg = when (readState) {
+                                        is com.bibin.visioneye.read.ReadState.Searching -> "Searching for text in view"
+                                        is com.bibin.visioneye.read.ReadState.PageDetected -> "Page detected. Hold steady."
+                                        is com.bibin.visioneye.read.ReadState.PageBoundaryNotDetected -> readState.message
+                                        is com.bibin.visioneye.read.ReadState.Capturing -> "Capturing page"
+                                        is com.bibin.visioneye.read.ReadState.ProcessingOcr -> "Extracting text from page"
+                                        is com.bibin.visioneye.read.ReadState.Reading -> "Reading text aloud"
+                                        is com.bibin.visioneye.read.ReadState.Completed -> "Reading completed"
+                                        is com.bibin.visioneye.read.ReadState.Error -> "Reading error: ${(readState as com.bibin.visioneye.read.ReadState.Error).message}"
+                                    }
+                                    contentDescription = "Document text reader. Status: $stateMsg"
+                                }
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "DOCUMENT OCR SCANNER",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = ReadGreen,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Text(
+                                        text = when (readState) {
+                                            is com.bibin.visioneye.read.ReadState.Searching -> "SEARCHING..."
+                                            is com.bibin.visioneye.read.ReadState.PageDetected -> "PAGE DETECTED"
+                                            is com.bibin.visioneye.read.ReadState.PageBoundaryNotDetected -> "PAGE BOUNDARY NOT DETECTED"
+                                            is com.bibin.visioneye.read.ReadState.Capturing -> "CAPTURING PAGE..."
+                                            is com.bibin.visioneye.read.ReadState.ProcessingOcr -> "PROCESSING OCR..."
+                                            is com.bibin.visioneye.read.ReadState.Reading -> "READING ALOUD"
+                                            is com.bibin.visioneye.read.ReadState.Completed -> "READING COMPLETE"
+                                            is com.bibin.visioneye.read.ReadState.Error -> "ERROR"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = when (readState) {
+                                            is com.bibin.visioneye.read.ReadState.Completed -> ReadGreen
+                                            is com.bibin.visioneye.read.ReadState.Reading,
+                                            is com.bibin.visioneye.read.ReadState.PageDetected -> HighContrastCyan
+                                            is com.bibin.visioneye.read.ReadState.PageBoundaryNotDetected -> HighContrastYellow
+                                            is com.bibin.visioneye.read.ReadState.Error -> EmergencyRed
+                                            else -> HighContrastYellow
+                                        },
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                when (readState) {
+                                    is com.bibin.visioneye.read.ReadState.Searching -> {
+                                        Text(
+                                            text = "Align printed text, storefront signs, or documents within camera view.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = HighContrastWhite
+                                        )
+                                    }
+                                    is com.bibin.visioneye.read.ReadState.PageDetected -> {
+                                        Text(
+                                            text = "Page aligned. Hold device steady for automatic high-resolution capture.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = HighContrastCyan,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    is com.bibin.visioneye.read.ReadState.PageBoundaryNotDetected -> {
+                                        Text(
+                                            text = readState.message,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = HighContrastYellow,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    is com.bibin.visioneye.read.ReadState.Capturing -> {
+                                        Text(
+                                            text = "Capturing high-resolution page photo...",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = HighContrastYellow
+                                        )
+                                    }
+                                    is com.bibin.visioneye.read.ReadState.ProcessingOcr -> {
+                                        Text(
+                                            text = "Rectifying document perspective and extracting text...",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = HighContrastCyan
+                                        )
+                                    }
+                                    is com.bibin.visioneye.read.ReadState.Reading -> {
+                                        val s = readState as com.bibin.visioneye.read.ReadState.Reading
+                                        Text(
+                                            text = "Speaking phrase ${s.chunkIndex + 1} of ${s.totalChunks}: \"${s.currentChunk}\"",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = HighContrastWhite,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    is com.bibin.visioneye.read.ReadState.Completed -> {
+                                        Text(
+                                            text = "Finished reading text aloud.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = ReadGreen,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    is com.bibin.visioneye.read.ReadState.Error -> {
+                                        val s = readState as com.bibin.visioneye.read.ReadState.Error
+                                        Text(
+                                            text = s.message,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = EmergencyRed,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                if (readState is com.bibin.visioneye.read.ReadState.Searching ||
+                                    readState is com.bibin.visioneye.read.ReadState.PageDetected ||
+                                    readState is com.bibin.visioneye.read.ReadState.PageBoundaryNotDetected
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(52.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(HighContrastYellow)
+                                            .clickable(onClick = onCapturePageNow)
+                                            .semantics {
+                                                role = Role.Button
+                                                contentDescription = "capture page now"
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "CAPTURE PAGE NOW",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = HighContrastBlack,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
+                                }
+
+                                if (readState is com.bibin.visioneye.read.ReadState.PageBoundaryNotDetected ||
+                                    readState is com.bibin.visioneye.read.ReadState.Completed ||
+                                    readState is com.bibin.visioneye.read.ReadState.Error
+                                ) {
+                                    val retryLabel = if (readState is com.bibin.visioneye.read.ReadState.PageBoundaryNotDetected) {
+                                        "RETRY SCANNING"
+                                    } else {
+                                        "SCAN ANOTHER DOCUMENT"
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(50.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(ReadGreen)
+                                            .clickable(onClick = onScanAgain)
+                                            .semantics {
+                                                role = Role.Button
+                                                contentDescription = retryLabel.lowercase()
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = retryLabel,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = HighContrastBlack,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -651,6 +850,10 @@ private fun BottomStatusOverlay(
                                                     .background(if (showDebugOverlay) HighContrastYellow else HighContrastSurface)
                                                     .border(1.dp, HighContrastBorder, RoundedCornerShape(6.dp))
                                                     .clickable { onToggleOverlay() }
+                                                    .semantics {
+                                                        role = Role.Button
+                                                        contentDescription = "Toggle face detection bounding boxes. Currently ${if (showDebugOverlay) "on" else "off"}"
+                                                    }
                                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                                             ) {
                                                 Text(
@@ -754,7 +957,8 @@ private fun CameraPermissionPrompt(
             ) {
                 Text(
                     text = "📷",
-                    fontSize = 48.sp
+                    fontSize = 48.sp,
+                    modifier = Modifier.semantics { hideFromAccessibility() }
                 )
 
                 Text(

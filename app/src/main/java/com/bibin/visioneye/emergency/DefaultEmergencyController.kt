@@ -7,6 +7,7 @@ import com.bibin.visioneye.navigation.location.LocationEngine
 import com.bibin.visioneye.navigation.location.LocationFix
 import com.bibin.visioneye.speech.SpeechController
 import com.bibin.visioneye.speech.SpeechPriority
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -86,7 +87,7 @@ class DefaultEmergencyController(
             _state.value = EmergencyState.Idle
             lastSpokenText = null
             lastSpokenTimeMs = 0L
-            speakOnce("SOS mode active.", SpeechPriority.IMMEDIATE_SAFETY)
+            speakOnce(VisionMode.SOS.announcement, SpeechPriority.IMMEDIATE_SAFETY)
             Log.d(TAG, "EmergencyController activated.")
         }
     }
@@ -139,10 +140,11 @@ class DefaultEmergencyController(
     }
 
     private suspend fun executeCountdownAndDispatch(contact: EmergencyContact) {
+        val currentJob = coroutineContext[Job]
         // A. Run confirmation countdown
         for (sec in countdownSeconds downTo 1) {
             synchronized(lock) {
-                if (!isActive) return
+                if (!isActive || currentJob?.isActive != true) return
                 _state.value = EmergencyState.Countdown(sec)
             }
             if (countdownIntervalMs > 0L) {
@@ -152,7 +154,7 @@ class DefaultEmergencyController(
 
         // B. Acquire location
         synchronized(lock) {
-            if (!isActive) return
+            if (!isActive || currentJob?.isActive != true) return
             _state.value = EmergencyState.AcquiringLocation
         }
 
@@ -180,7 +182,7 @@ class DefaultEmergencyController(
         val message = EmergencyMessageFormatter.formatMessage(locationFix)
 
         synchronized(lock) {
-            if (!isActive) return
+            if (!isActive || currentJob?.isActive != true) return
             _state.value = EmergencyState.Sending(message, locationFix)
         }
 

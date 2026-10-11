@@ -24,14 +24,34 @@ sealed interface ReadState {
     ) : ReadState
 
     /**
-     * Triggering high-resolution capture via CameraX ImageCapture.
+     * Manual capture was attempted, but no verified page boundary was detected in view.
+     * Instructs user to reposition the book and retry detection.
+     *
+     * @property message Spoken/displayed guidance message.
      */
-    data class Capturing(val detectedPage: DetectedPage) : ReadState
+    data class PageBoundaryNotDetected(
+        val message: String = "Page boundary not detected. Reposition the book and try again."
+    ) : ReadState
+
+    /**
+     * Triggering high-resolution capture via CameraX ImageCapture.
+     *
+     * @property detectedPage The page boundary being captured (or full-frame fallback).
+     * @property isVerifiedPage True if capturing a verified page boundary; false if unverified full-frame fallback.
+     */
+    data class Capturing(
+        val detectedPage: DetectedPage,
+        val isVerifiedPage: Boolean = detectedPage.isVerifiedBoundary
+    ) : ReadState
 
     /**
      * High-res image captured; performing perspective correction and ML Kit OCR.
+     *
+     * @property isVerifiedPage True if processing a verified page crop; false if processing unverified full frame.
      */
-    data object ProcessingOcr : ReadState
+    data class ProcessingOcr(
+        val isVerifiedPage: Boolean = true
+    ) : ReadState
 
     /**
      * OCR completed; actively vocalizing text sequentially.

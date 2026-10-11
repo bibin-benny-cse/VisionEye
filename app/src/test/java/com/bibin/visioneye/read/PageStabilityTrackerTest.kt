@@ -146,4 +146,39 @@ class PageStabilityTrackerTest {
         assertEquals(1, tracker.stableCount)
         assertEquals(0.25f, nextResult.progress, 0.001f)
     }
+
+    @Test
+    fun defaultConstructor_reachesStabilityInTwoFrames() {
+        val fastTracker = PageStabilityTracker()
+        assertEquals(2, fastTracker.requiredStableFrames)
+        assertEquals(0.08f, fastTracker.maxCenterDrift, 0.001f)
+        assertEquals(0.18f, fastTracker.maxAreaVariation, 0.001f)
+
+        val page1 = createPage()
+        val res1 = fastTracker.update(page1)
+        assertFalse(res1.isStable)
+        assertEquals(0.50f, res1.progress, 0.001f)
+
+        // Hand tremor of 6% center drift is within 8% tolerance
+        val page2 = createPage(left = 0.16f, right = 0.96f)
+        val res2 = fastTracker.update(page2)
+        assertTrue(res2.isStable)
+        assertEquals(1.0f, res2.progress, 0.001f)
+        assertEquals(2, fastTracker.stableCount)
+        assertTrue(fastTracker.stabilizationDurationMs >= 0L)
+    }
+
+    @Test
+    fun defaultConstructor_movementExceedingEightPercent_resetsCounter() {
+        val fastTracker = PageStabilityTracker()
+        val page1 = createPage(left = 0.1f, right = 0.5f) // center = 0.30
+        fastTracker.update(page1)
+
+        // Significant movement: center shifts to 0.45 (15% drift > 8% limit)
+        val movingPage = createPage(left = 0.25f, right = 0.65f)
+        val res = fastTracker.update(movingPage)
+        assertFalse(res.isStable)
+        assertEquals(1, fastTracker.stableCount)
+        assertEquals(0.50f, res.progress, 0.001f)
+    }
 }

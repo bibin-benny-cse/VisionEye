@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -476,7 +477,7 @@ private fun NavigationDiagnosticDashboard(
                 .clickable(onClick = onStopNavigation)
                 .semantics {
                     role = Role.Button
-                    contentDescription = "Stop Navigation. Exits outdoor GPS guidance and returns to dashboard. Double tap to activate."
+                    contentDescription = "Stop navigation. Exits outdoor GPS guidance and returns to dashboard."
                 }
                 .padding(horizontal = 20.dp),
             contentAlignment = Alignment.Center
@@ -485,7 +486,11 @@ private fun NavigationDiagnosticDashboard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(text = "🛑", fontSize = 24.sp)
+                Text(
+                    text = "🛑",
+                    fontSize = 24.sp,
+                    modifier = Modifier.semantics { hideFromAccessibility() }
+                )
                 Text(
                     text = "STOP NAVIGATION",
                     style = MaterialTheme.typography.titleMedium,
@@ -495,13 +500,23 @@ private fun NavigationDiagnosticDashboard(
             }
         }
 
-        Text(
-            text = "⚠️ White cane recommended. Assistive prototype.",
-            style = MaterialTheme.typography.bodySmall,
-            color = HighContrastTextMuted,
-            textAlign = TextAlign.Center,
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
-        )
+        ) {
+            Text(
+                text = "⚠️ ",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.semantics { hideFromAccessibility() }
+            )
+            Text(
+                text = "White cane recommended. Assistive prototype.",
+                style = MaterialTheme.typography.bodySmall,
+                color = HighContrastTextMuted,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -560,7 +575,8 @@ private fun LocationPermissionPrompt(
             ) {
                 Text(
                     text = "📍",
-                    fontSize = 48.sp
+                    fontSize = 48.sp,
+                    modifier = Modifier.semantics { hideFromAccessibility() }
                 )
 
                 Text(
@@ -591,7 +607,7 @@ private fun LocationPermissionPrompt(
                         .clickable(onClick = onRequestPermission)
                         .semantics {
                             role = Role.Button
-                            contentDescription = "Grant Location Permission. Double tap to open system permission dialog."
+                            contentDescription = "Grant location permission"
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -614,7 +630,7 @@ private fun LocationPermissionPrompt(
                         .clickable(onClick = onCancel)
                         .semantics {
                             role = Role.Button
-                            contentDescription = "Cancel and return to dashboard. Double tap to dismiss."
+                            contentDescription = "Cancel and return to dashboard"
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -717,16 +733,26 @@ private fun DestinationRoutingCard(
                         }
                         .semantics {
                             role = Role.Button
-                            contentDescription = "Search destination and calculate walking route. Double tap to activate."
+                            contentDescription = "Search destination and calculate walking route"
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "🔍 START / ROUTE",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = HighContrastBlack,
-                        fontWeight = FontWeight.ExtraBold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "🔍",
+                            fontSize = 18.sp,
+                            modifier = Modifier.semantics { hideFromAccessibility() }
+                        )
+                        Text(
+                            text = "START / ROUTE",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = HighContrastBlack,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
                 }
 
                 // Accessible Cancel Button
@@ -747,7 +773,7 @@ private fun DestinationRoutingCard(
                             .padding(horizontal = 16.dp)
                             .semantics {
                                 role = Role.Button
-                                contentDescription = "Cancel destination route search and clear input. Double tap to activate."
+                                contentDescription = "Cancel destination route search and clear input"
                             },
                         contentAlignment = Alignment.Center
                     ) {
@@ -771,16 +797,26 @@ private fun DestinationRoutingCard(
                         .border(1.dp, HighContrastYellow, RoundedCornerShape(10.dp))
                         .padding(14.dp)
                         .semantics {
-                            contentDescription = "Finding destination in progress."
+                            contentDescription = "Finding destination in progress"
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "⏳ Finding destination...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = HighContrastYellow,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "⏳",
+                            fontSize = 18.sp,
+                            modifier = Modifier.semantics { hideFromAccessibility() }
+                        )
+                        Text(
+                            text = "Finding destination...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = HighContrastYellow,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
@@ -794,16 +830,26 @@ private fun DestinationRoutingCard(
                         .border(1.dp, HighContrastCyan, RoundedCornerShape(10.dp))
                         .padding(14.dp)
                         .semantics {
-                            contentDescription = "Getting walking route in progress."
+                            contentDescription = "Getting walking route in progress"
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "🚶 Getting walking route...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = HighContrastCyan,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "🚶",
+                            fontSize = 18.sp,
+                            modifier = Modifier.semantics { hideFromAccessibility() }
+                        )
+                        Text(
+                            text = "Getting walking route...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = HighContrastCyan,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
@@ -823,12 +869,22 @@ private fun DestinationRoutingCard(
                             contentDescription = "Routing error: $errorMsg"
                         }
                 ) {
-                    Text(
-                        text = "⚠️ $errorMsg",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = EmergencyRed,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "⚠️",
+                            fontSize = 16.sp,
+                            modifier = Modifier.semantics { hideFromAccessibility() }
+                        )
+                        Text(
+                            text = errorMsg,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = EmergencyRed,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
@@ -1056,7 +1112,7 @@ private fun ActiveGuidanceCard(
                     .clickable(onClick = onStopGuidance)
                     .semantics {
                         role = Role.Button
-                        contentDescription = "Stop guidance. Returns to route overview. Double tap to activate."
+                        contentDescription = "Stop guidance. Returns to route overview"
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -1064,7 +1120,11 @@ private fun ActiveGuidanceCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(text = "⏹", fontSize = 18.sp)
+                    Text(
+                        text = "⏹",
+                        fontSize = 18.sp,
+                        modifier = Modifier.semantics { hideFromAccessibility() }
+                    )
                     Text(
                         text = "STOP GUIDANCE",
                         style = MaterialTheme.typography.titleMedium,

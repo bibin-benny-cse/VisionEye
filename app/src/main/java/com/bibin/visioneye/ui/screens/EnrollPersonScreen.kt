@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -144,7 +145,22 @@ fun EnrollPersonScreen(
                             .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = "◀ CANCEL", color = HighContrastYellow, fontWeight = FontWeight.Bold)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "◀",
+                                color = HighContrastYellow,
+                                fontSize = 14.sp,
+                                modifier = Modifier.semantics { hideFromAccessibility() }
+                            )
+                            Text(
+                                text = "CANCEL",
+                                color = HighContrastYellow,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
                     Text(
@@ -167,12 +183,22 @@ fun EnrollPersonScreen(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Text(
-                            text = "👤 Step 1: Who are you enrolling?",
+                            text = "👤",
+                            fontSize = 18.sp,
+                            modifier = Modifier.semantics { hideFromAccessibility() }
+                        )
+                        Text(
+                            text = "Step 1: Who are you enrolling?",
                             style = MaterialTheme.typography.titleMedium,
                             color = PeoplePurple,
                             fontWeight = FontWeight.Bold
                         )
+                    }
                         Text(
                             text = "Enter the name VisionEye should speak when this person is seen (e.g. \"Father\", \"Mother\", or \"Arun\").",
                             style = MaterialTheme.typography.bodyMedium,
@@ -251,12 +277,22 @@ fun EnrollPersonScreen(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "START FACE CAPTURE 📷",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (isNameValid) HighContrastWhite else HighContrastTextMuted,
-                        fontWeight = FontWeight.ExtraBold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "START FACE CAPTURE",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (isNameValid) HighContrastWhite else HighContrastTextMuted,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "📷",
+                            fontSize = 18.sp,
+                            modifier = Modifier.semantics { hideFromAccessibility() }
+                        )
+                    }
                 }
             }
         } else {
@@ -296,10 +332,29 @@ fun EnrollPersonScreen(
                                     cameraController.unbindCamera()
                                     isCameraActive = false
                                 }
+                                .semantics {
+                                    role = Role.Button
+                                    contentDescription = "Cancel enrollment"
+                                }
                                 .padding(horizontal = 14.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = "◀ CANCEL", color = HighContrastYellow, fontWeight = FontWeight.Bold)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "◀",
+                                    color = HighContrastYellow,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.semantics { hideFromAccessibility() }
+                                )
+                                Text(
+                                    text = "CANCEL",
+                                    color = HighContrastYellow,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
 
                         Box(
@@ -332,12 +387,22 @@ fun EnrollPersonScreen(
                                 .padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Text(
-                                text = "🛠 ENROLLMENT DIAGNOSTICS (DEBUG ONLY)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = HighContrastCyan,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "🛠",
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.semantics { hideFromAccessibility() }
+                                )
+                                Text(
+                                    text = "ENROLLMENT DIAGNOSTICS (DEBUG ONLY)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = HighContrastCyan,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween

@@ -1,6 +1,7 @@
 package com.bibin.visioneye.read
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -130,5 +131,35 @@ class ReadingOrderOrganizerTest {
         val result = organizer.organize(lines)
         assertTrue(result.contains("Invarient (misspelled intentionally)"))
         assertTrue(result.contains("Formula: x + 2y = 42.5; Alpha: 0.001"))
+    }
+
+    @Test
+    fun organize_preservesLegitimateShortWordsAndDigits() {
+        // Legitimate single-character words and digits must never be discarded
+        val lines = listOf(
+            RecognizedLine("I saw a bird in the sky.", 50f, 20f, 250f, 40f),
+            RecognizedLine("1. Step one of the process.", 50f, 50f, 250f, 70f)
+        )
+
+        val result = organizer.organize(lines)
+        assertTrue("Must preserve pronoun 'I'", result.contains("I saw a bird in the sky."))
+        assertTrue("Must preserve digit '1'", result.contains("1. Step one of the process."))
+    }
+
+    @Test
+    fun organize_filtersIsolatedLayoutArtifacts() {
+        val lines = listOf(
+            RecognizedLine("|", 10f, 10f, 15f, 50f),
+            RecognizedLine("Chapter Title", 50f, 20f, 200f, 40f),
+            RecognizedLine("---", 50f, 45f, 200f, 48f),
+            RecognizedLine("First line of story.", 50f, 60f, 250f, 80f),
+            RecognizedLine("~", 50f, 90f, 55f, 95f)
+        )
+
+        val result = organizer.organize(lines)
+        assertEquals("Chapter Title\nFirst line of story.", result)
+        assertFalse(result.contains("|"))
+        assertFalse(result.contains("---"))
+        assertFalse(result.contains("~"))
     }
 }

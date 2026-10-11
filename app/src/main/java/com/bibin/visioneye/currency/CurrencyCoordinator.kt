@@ -7,6 +7,7 @@ import androidx.camera.core.ImageProxy
 import com.bibin.visioneye.ai.DetectorState
 import com.bibin.visioneye.ai.DetectorStatusCode
 import com.bibin.visioneye.camera.FrameAnalyzer
+import com.bibin.visioneye.core.mode.VisionMode
 import com.bibin.visioneye.speech.SpeechController
 import com.bibin.visioneye.speech.SpeechPriority
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -111,6 +112,11 @@ class CurrencyCoordinator(
             decisionEngine.reset()
             val initSuccess = detector.initialize()
             updateStatusFromDetector(initSuccess)
+            if (initSuccess) {
+                speechController?.announceMode(VisionMode.CURRENCY)
+            } else {
+                speechController?.speak("Currency model unavailable.", SpeechPriority.NORMAL)
+            }
             Log.d(TAG, "CurrencyCoordinator activated.")
         }
     }

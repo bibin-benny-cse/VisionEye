@@ -23,15 +23,19 @@ class TextChunker(
 
         val chunks = mutableListOf<String>()
 
-        // Split into paragraphs by newline
-        val paragraphs = trimmed.split(Regex("\n+"))
+        // Split into paragraphs by double-newline
+        val paragraphs = trimmed.split(Regex("(?:\r?\n){2,}"))
 
         for (paragraph in paragraphs) {
-            val pTrimmed = paragraph.trim()
+            // Merge hyphenated linebreaks across words
+            val unhyphenated = paragraph.replace(Regex("([a-zA-Z])-[\t ]*\r?\n[\t ]*([a-zA-Z])"), "$1$2")
+            // Merge single linebreaks into spaces within the paragraph
+            val mergedLines = unhyphenated.replace(Regex("[\t ]*\r?\n[\t ]*"), " ")
+            val pTrimmed = mergedLines.replace(Regex("\\s+"), " ").trim()
             if (pTrimmed.isEmpty()) continue
 
-            // Split into sentences using punctuation boundaries (. ! ?)
-            val sentences = pTrimmed.split(Regex("(?<=[.!?])\\s+"))
+            // Split into clean sentences
+            val sentences = splitSentences(pTrimmed)
 
             var currentChunk = StringBuilder()
 
@@ -65,6 +69,53 @@ class TextChunker(
         }
 
         return chunks.filter { it.isNotBlank() }
+    }
+
+    /**
+     * Splits a paragraph into complete sentences while preventing false splits
+     * on common abbreviations ("Dr.", "Mr.", "U.S.") or initials.
+     */
+    internal fun splitSentences(paragraph: String): List<String> {
+        val rawTokens = paragraph.split(Regex("(?<=[.!?])\\s+"))
+        if (rawTokens.size <= 1) return rawTokens.filter { it.isNotBlank() }
+
+        val abbreviations = setOf(
+            "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "vs", "etc",
+            "eg", "ie", "no", "vol", "pp", "p", "fig", "approx", "est", "st", "al"
+        )
+
+        val sentences = mutableListOf<String>()
+        var currentSentence = StringBuilder()
+
+        for (i in rawTokens.indices) {
+            val token = rawTokens[i].trim()
+            if (token.isEmpty()) continue
+
+            if (currentSentence.isNotEmpty()) {
+                currentSentence.append(" ")
+            }
+            currentSentence.append(token)
+
+            // Check if currentSentence ends with a true sentence boundary
+            val lastWord = currentSentence.split(Regex("\\s+")).lastOrNull()?.trimEnd('.', '!', '?')?.lowercase() ?: ""
+            val isAbbr = abbreviations.contains(lastWord)
+            val isSingleInitial = lastWord.length == 1 && lastWord[0].isLetter()
+
+            // If it ends with . and is an abbreviation or initial, do not treat as sentence end unless it's the last token
+            if (i < rawTokens.size - 1 && (isAbbr || isSingleInitial)) {
+                continue
+            }
+
+            // Valid sentence boundary reached
+            sentences.add(currentSentence.toString().trim())
+            currentSentence = StringBuilder()
+        }
+
+        if (currentSentence.isNotEmpty()) {
+            sentences.add(currentSentence.toString().trim())
+        }
+
+        return sentences.filter { it.isNotBlank() }
     }
 
     private fun splitLongSentence(sentence: String, maxLength: Int): List<String> {

@@ -197,7 +197,7 @@ class DefaultNavigationController(
             status = GpsStatus.ACQUIRING
         )
         _state.value = NavigationState.AcquiringGps(hasPermission = true)
-        speakOnce("Navigation active. Acquiring GPS signal.")
+        speakOnce(VisionMode.NAVIGATION.announcement)
 
         locationEngine.startLocationUpdates()
 

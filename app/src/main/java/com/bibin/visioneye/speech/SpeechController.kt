@@ -53,6 +53,18 @@ interface SpeechController {
     fun stop()
 
     /**
+     * Announces mode transition to the visually impaired user using the mode's configured introduction.
+     */
+    fun announceMode(mode: com.bibin.visioneye.core.mode.VisionMode) {
+        val priority = if (mode == com.bibin.visioneye.core.mode.VisionMode.SOS) {
+            SpeechPriority.IMMEDIATE_SAFETY
+        } else {
+            SpeechPriority.HIGH
+        }
+        speak(utterance = mode.announcement, priority = priority)
+    }
+
+    /**
      * Announces mode transition to the visually impaired user.
      */
     fun announceMode(modeName: String) {

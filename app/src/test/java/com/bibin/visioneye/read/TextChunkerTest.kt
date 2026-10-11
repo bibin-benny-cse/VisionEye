@@ -95,4 +95,31 @@ class TextChunkerTest {
         assertEquals("Paragraph two sentence.", chunks[1])
         assertEquals("Paragraph three sentence.", chunks[2])
     }
+
+    @Test
+    fun chunk_multilineSentenceInSameParagraph_mergesIntoSingleCoherentSentence() {
+        val input = "The quick brown fox jumped\nover the lazy dog in the\ngreen meadow."
+        val chunks = chunker.chunk(input)
+
+        assertEquals(1, chunks.size)
+        assertEquals("The quick brown fox jumped over the lazy dog in the green meadow.", chunks[0])
+    }
+
+    @Test
+    fun chunk_hyphenatedWordAcrossLineBreak_healsWordSeamlessly() {
+        val input = "Winston Smith felt the experi-\nence of freedom in his heart."
+        val chunks = chunker.chunk(input)
+
+        assertEquals(1, chunks.size)
+        assertEquals("Winston Smith felt the experience of freedom in his heart.", chunks[0])
+    }
+
+    @Test
+    fun chunk_sentencesWithAbbreviations_doesNotSplitOnAbbreviation() {
+        val input = "Dr. Smith met with Prof. Jones at 10 a.m. yesterday."
+        val chunks = chunker.chunk(input)
+
+        assertEquals(1, chunks.size)
+        assertEquals("Dr. Smith met with Prof. Jones at 10 a.m. yesterday.", chunks[0])
+    }
 }

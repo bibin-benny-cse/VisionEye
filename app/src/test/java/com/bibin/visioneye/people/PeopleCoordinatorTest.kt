@@ -134,6 +134,8 @@ class PeopleCoordinatorTest {
     @Test
     fun decisionEngine_integrationDirectProcess_emitsSpeechViaController() {
         coordinator.activate()
+        assertEquals(listOf(VisionMode.PEOPLE.announcement), fakeSpeech.spokenUtterances)
+        fakeSpeech.spokenUtterances.clear()
 
         val father = SavedPerson(
             id = "f-1",

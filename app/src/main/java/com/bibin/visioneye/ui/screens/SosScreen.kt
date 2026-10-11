@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -160,7 +161,11 @@ fun SosScreen(
                         .border(2.dp, EmergencyRed, RoundedCornerShape(22.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = "🚨", fontSize = 22.sp)
+                    Text(
+                        text = "🚨",
+                        fontSize = 22.sp,
+                        modifier = Modifier.semantics { hideFromAccessibility() }
+                    )
                 }
             }
 
@@ -176,12 +181,22 @@ fun SosScreen(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "⚠️ SMS PERMISSION REQUIRED",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = HighContrastYellow,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "⚠️",
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.semantics { hideFromAccessibility() }
+                            )
+                            Text(
+                                text = "SMS PERMISSION REQUIRED",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = HighContrastYellow,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         Text(
                             text = "Grant SMS permission so VisionEye can automatically send emergency coordinates to your contact.",
                             style = MaterialTheme.typography.bodySmall,
@@ -196,7 +211,7 @@ fun SosScreen(
                                 .clickable { smsPermissionLauncher.launch(Manifest.permission.SEND_SMS) }
                                 .semantics {
                                     role = Role.Button
-                                    contentDescription = "Grant SMS Permission button"
+                                    contentDescription = "Grant SMS Permission"
                                 },
                             contentAlignment = Alignment.Center
                         ) {
@@ -237,12 +252,10 @@ fun SosScreen(
                         )
 
                         if (!isEditingContact && contact != null) {
-                            Text(
-                                text = "EDIT",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = HighContrastCyan,
-                                fontWeight = FontWeight.Bold,
+                            Box(
                                 modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .border(1.dp, HighContrastCyan, RoundedCornerShape(6.dp))
                                     .clickable {
                                         contactNameInput = contact?.name ?: ""
                                         contactPhoneInput = contact?.phoneNumber ?: ""
@@ -252,7 +265,15 @@ fun SosScreen(
                                         role = Role.Button
                                         contentDescription = "Edit emergency contact"
                                     }
-                            )
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = "EDIT",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = HighContrastCyan,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
 
@@ -332,23 +353,53 @@ fun SosScreen(
                         }
                     } else {
                         if (contact != null) {
-                            Text(
-                                text = "👤 ${contact?.name}",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = HighContrastWhite,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "📞 ${contact?.phoneNumber}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = HighContrastCyan
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "👤",
+                                    fontSize = 20.sp,
+                                    modifier = Modifier.semantics { hideFromAccessibility() }
+                                )
+                                Text(
+                                    text = contact?.name ?: "",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = HighContrastWhite,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "📞",
+                                    fontSize = 18.sp,
+                                    modifier = Modifier.semantics { hideFromAccessibility() }
+                                )
+                                Text(
+                                    text = contact?.phoneNumber ?: "",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = HighContrastCyan
+                                )
+                            }
                         } else {
-                            Text(
-                                text = "⚠️ No emergency contact configured.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = EmergencyRed
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "⚠️",
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.semantics { hideFromAccessibility() }
+                                )
+                                Text(
+                                    text = "No emergency contact configured.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = EmergencyRed
+                                )
+                            }
                         }
                     }
                 }
@@ -499,7 +550,7 @@ fun SosScreen(
                             .clickable { emergencyController.cancelSos() }
                             .semantics {
                                 role = Role.Button
-                                contentDescription = "Cancel SOS Countdown. Double tap to stop sending emergency message."
+                                contentDescription = "Cancel SOS countdown"
                             },
                         contentAlignment = Alignment.Center
                     ) {
@@ -507,7 +558,11 @@ fun SosScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(text = "🛑", fontSize = 32.sp)
+                            Text(
+                                text = "🛑",
+                                fontSize = 32.sp,
+                                modifier = Modifier.semantics { hideFromAccessibility() }
+                            )
                             Text(
                                 text = "CANCEL SOS",
                                 style = MaterialTheme.typography.titleLarge,
@@ -553,7 +608,7 @@ fun SosScreen(
                             .clickable { emergencyController.triggerSos() }
                             .semantics {
                                 role = Role.Button
-                                contentDescription = "Trigger Emergency SOS. Starts a 3 second countdown before dispatching your location to your contact. Double tap to activate."
+                                contentDescription = "Trigger Emergency SOS. Starts a 3 second countdown before dispatching your location to your contact."
                             },
                         contentAlignment = Alignment.Center
                     ) {
@@ -561,7 +616,11 @@ fun SosScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(text = "🚨", fontSize = 32.sp)
+                            Text(
+                                text = "🚨",
+                                fontSize = 32.sp,
+                                modifier = Modifier.semantics { hideFromAccessibility() }
+                            )
                             Text(
                                 text = "TRIGGER SOS",
                                 style = MaterialTheme.typography.headlineSmall,
@@ -591,12 +650,23 @@ fun SosScreen(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "← RETURN TO MAIN MENU",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = HighContrastWhite,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "←",
+                        fontSize = 18.sp,
+                        color = HighContrastWhite,
+                        modifier = Modifier.semantics { hideFromAccessibility() }
+                    )
+                    Text(
+                        text = "RETURN TO MAIN MENU",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = HighContrastWhite,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

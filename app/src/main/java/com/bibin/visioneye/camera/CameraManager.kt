@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.util.Log
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -213,7 +214,9 @@ class CameraManager(
                 val useCases = mutableListOf<UseCase>()
 
                 // 1. Live Preview Use Case
-                val preview = Preview.Builder().build()
+                val preview = Preview.Builder()
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                    .build()
                 currentSurfaceProvider?.let { providerTarget ->
                     preview.setSurfaceProvider(providerTarget)
                 }
@@ -221,6 +224,7 @@ class CameraManager(
 
                 // 2. ImageAnalysis Use Case (Non-blocking latest-frame backpressure for YOLO inference)
                 val analysisUseCase = ImageAnalysis.Builder()
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                     .build()
@@ -232,6 +236,7 @@ class CameraManager(
 
                 // 3. ImageCapture Use Case (High-resolution capture for READ mode)
                 val captureUseCase = ImageCapture.Builder()
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .build()
                 imageCapture = captureUseCase
@@ -243,7 +248,10 @@ class CameraManager(
                     setFrameAnalyzer(enrollmentCoordinator.frameAnalyzer)
                 } else {
                     when (currentActiveMode) {
-                        VisionMode.NAVIGATE -> setFrameAnalyzer(yoloAnalyzer)
+                        VisionMode.NAVIGATE -> {
+                            setFrameAnalyzer(yoloAnalyzer)
+                            speechController?.announceMode(VisionMode.NAVIGATE)
+                        }
                         VisionMode.READ -> {
                             readCoordinator.activate()
                             setFrameAnalyzer(readCoordinator.frameAnalyzer)
@@ -354,6 +362,14 @@ class CameraManager(
         frameDispatcher.clearAnalyzers()
     }
 
+    override fun scanAgain() {
+        readCoordinator.scanAgain()
+    }
+
+    override fun capturePageNow() {
+        readCoordinator.capturePageNow()
+    }
+
     /**
      * Configures the target analysis frames per second rate (default 5.0).
      */
@@ -380,7 +396,11 @@ class CameraManager(
                         val bitmap = imageProxy.toBitmap()
                         val uprightBitmap = if (rotationDegrees != 0) {
                             val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-                            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                            if (rotated != bitmap) {
+                                bitmap.recycle()
+                            }
+                            rotated
                         } else {
                             bitmap
                         }
@@ -411,6 +431,9 @@ class CameraManager(
                 peopleCoordinator.deactivate()
                 currencyCoordinator.deactivate()
                 setFrameAnalyzer(yoloAnalyzer)
+                if (_state.value is CameraState.Streaming) {
+                    speechController?.announceMode(VisionMode.NAVIGATE)
+                }
             }
             VisionMode.READ -> {
                 yoloAnalyzer.reset()
