@@ -13,12 +13,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
@@ -49,6 +54,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.bibin.visioneye.camera.CameraController
+import com.bibin.visioneye.ui.components.VisionHeader
+import com.bibin.visioneye.ui.components.VoiceControlButton
 import com.bibin.visioneye.ui.theme.HighContrastBlack
 import com.bibin.visioneye.ui.theme.HighContrastBorder
 import com.bibin.visioneye.ui.theme.HighContrastCard
@@ -71,12 +78,14 @@ fun EnrollPersonScreen(
     cameraController: CameraController,
     onEnrollmentComplete: () -> Unit,
     onCancel: () -> Unit,
+    voiceController: com.bibin.visioneye.voice.VoiceController? = null,
     modifier: Modifier = Modifier
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val enrollmentState by cameraController.enrollmentState.collectAsState()
 
     var personNameInput by remember { mutableStateOf("") }
+    var hasConsent by remember { mutableStateOf(false) }
     var isCameraActive by remember { mutableStateOf(false) }
 
     var hasCameraPermission by remember {
@@ -87,9 +96,59 @@ fun EnrollPersonScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasCameraPermission = granted
-        if (granted && personNameInput.isNotBlank()) {
+        if (granted && personNameInput.isNotBlank() && hasConsent) {
             isCameraActive = true
             cameraController.startPersonEnrollment(personNameInput.trim())
+        }
+    }
+
+    androidx.compose.runtime.DisposableEffect(isCameraActive, personNameInput, hasConsent, enrollmentState, voiceController) {
+        if (voiceController != null) {
+            voiceController.setScreenContext(com.bibin.visioneye.voice.VoiceScreenContext.ENROLL_PERSON)
+            voiceController.setDictationConsumer { fieldType, text ->
+                if (fieldType == com.bibin.visioneye.voice.DictationFieldType.PERSON_NAME) {
+                    val clean = text.trim()
+                    personNameInput = clean
+                    com.bibin.visioneye.voice.VoiceActionResult.Success("Person name set to $clean.")
+                } else {
+                    com.bibin.visioneye.voice.VoiceActionResult.Error("Unsupported field")
+                }
+            }
+            val actions = com.bibin.visioneye.voice.ScreenVoiceActions.createEnrollPersonActions(
+                isCameraActive = isCameraActive,
+                onCancel = {
+                    if (isCameraActive) {
+                        cameraController.stopPersonEnrollment()
+                        cameraController.unbindCamera()
+                        isCameraActive = false
+                    } else {
+                        onCancel()
+                    }
+                },
+                getPersonName = { personNameInput },
+                setPersonName = { personNameInput = it },
+                getConsentChecked = { hasConsent },
+                setConsentChecked = { hasConsent = it },
+                onStartCapture = {
+                    if (!hasCameraPermission) {
+                        permissionLauncher.launch(Manifest.permission.CAMERA)
+                    } else {
+                        isCameraActive = true
+                        cameraController.startPersonEnrollment(personNameInput.trim())
+                    }
+                },
+                isComplete = { enrollmentState.isComplete },
+                onDone = {
+                    cameraController.stopPersonEnrollment()
+                    cameraController.unbindCamera()
+                    onEnrollmentComplete()
+                }
+            )
+            voiceController.registry.registerAll(actions)
+        }
+        onDispose {
+            voiceController?.registry?.unregisterForContext(com.bibin.visioneye.voice.VoiceScreenContext.ENROLL_PERSON)
+            voiceController?.setDictationConsumer(null)
         }
     }
 
@@ -117,90 +176,62 @@ fun EnrollPersonScreen(
         color = HighContrastBlack
     ) {
         if (!isCameraActive) {
+            val step1ScrollState = rememberScrollState()
+
             // Step 1: Enter Name
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(16.dp)
+                    .verticalScroll(step1ScrollState),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .height(50.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(HighContrastCard)
-                            .border(2.dp, HighContrastYellow, RoundedCornerShape(12.dp))
-                            .clickable(onClick = onCancel)
-                            .semantics {
-                                role = Role.Button
-                                contentDescription = "Cancel enrollment"
-                            }
-                            .padding(horizontal = 16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = "◀",
-                                color = HighContrastYellow,
-                                fontSize = 14.sp,
-                                modifier = Modifier.semantics { hideFromAccessibility() }
-                            )
-                            Text(
-                                text = "CANCEL",
-                                color = HighContrastYellow,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                // Header with Cancel Button
+                VisionHeader(
+                    title = "SAVE PERSON",
+                    subtitle = "Step 1: Identity Information",
+                    onBack = onCancel,
+                    backLabel = "Cancel enrollment"
+                )
 
-                    Text(
-                        text = "SAVE PERSON",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = HighContrastWhite,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
+                VoiceControlButton(
+                    voiceController = voiceController,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = HighContrastCard),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, PeoplePurple)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "👤",
+                                fontSize = 18.sp,
+                                modifier = Modifier.semantics { hideFromAccessibility() }
+                            )
+                            Text(
+                                text = "Who are you enrolling?",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = PeoplePurple,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         Text(
-                            text = "👤",
-                            fontSize = 18.sp,
-                            modifier = Modifier.semantics { hideFromAccessibility() }
-                        )
-                        Text(
-                            text = "Step 1: Who are you enrolling?",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = PeoplePurple,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                        Text(
-                            text = "Enter the name VisionEye should speak when this person is seen (e.g. \"Father\", \"Mother\", or \"Arun\").",
+                            text = "Enter the name VisionEye should speak when this person is seen in camera view (e.g. \"Father\", \"Mother\", or \"Arun\").",
                             style = MaterialTheme.typography.bodyMedium,
                             color = HighContrastWhite
                         )
@@ -213,7 +244,10 @@ fun EnrollPersonScreen(
                     label = { Text("Person Name", color = HighContrastYellow) },
                     placeholder = { Text("e.g. Father", color = HighContrastTextMuted) },
                     singleLine = true,
-                    textStyle = MaterialTheme.typography.titleLarge.copy(color = HighContrastWhite, fontWeight = FontWeight.Bold),
+                    textStyle = MaterialTheme.typography.titleLarge.copy(
+                        color = HighContrastWhite,
+                        fontWeight = FontWeight.Bold
+                    ),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = HighContrastYellow,
                         unfocusedBorderColor = HighContrastBorder,
@@ -228,42 +262,114 @@ fun EnrollPersonScreen(
                 )
 
                 // Quick Suggestion Chips
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf("Father", "Mother", "Arun").forEach { suggestion ->
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(HighContrastCard)
-                                .border(1.dp, HighContrastYellow, RoundedCornerShape(8.dp))
-                                .clickable { personNameInput = suggestion }
-                                .semantics {
-                                    role = Role.Button
-                                    contentDescription = "Set name to $suggestion"
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = suggestion, color = HighContrastYellow, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Quick suggestions:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = HighContrastTextMuted
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Father", "Mother", "Arun").forEach { suggestion ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .defaultMinSize(minHeight = 48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(HighContrastCard)
+                                    .border(1.5.dp, HighContrastYellow, RoundedCornerShape(8.dp))
+                                    .clickable { personNameInput = suggestion }
+                                    .semantics {
+                                        role = Role.Button
+                                        contentDescription = "Set name to $suggestion"
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = suggestion,
+                                    color = HighContrastYellow,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
+                // Informed Consent Checkbox / Row
+                val consentBorderColor = if (hasConsent) ReadGreen else HighContrastBorder
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { hasConsent = !hasConsent }
+                        .semantics {
+                            role = Role.Checkbox
+                            contentDescription = if (hasConsent) {
+                                "Consent obtained. Explicit consent granted."
+                            } else {
+                                "Consent obtained not checked. Explicit consent required before capture."
+                            }
+                        },
+                    colors = CardDefaults.cardColors(containerColor = HighContrastCard),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, consentBorderColor)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = hasConsent,
+                            onCheckedChange = { hasConsent = it },
+                            colors = androidx.compose.material3.CheckboxDefaults.colors(
+                                checkedColor = ReadGreen,
+                                uncheckedColor = HighContrastWhite,
+                                checkmarkColor = HighContrastBlack
+                            )
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Consent obtained",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = if (hasConsent) ReadGreen else HighContrastWhite,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Explicit informed consent to capture and locally store biometric face embeddings.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = HighContrastTextMuted
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Start Camera Capture Button
                 val isNameValid = personNameInput.isNotBlank()
+                val isReadyToCapture = isNameValid && hasConsent
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(64.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(if (isNameValid) PeoplePurple else HighContrastCard)
-                        .border(2.dp, if (isNameValid) HighContrastWhite else HighContrastBorder, RoundedCornerShape(14.dp))
-                        .clickable(enabled = isNameValid) {
+                        .defaultMinSize(minHeight = 56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isReadyToCapture) PeoplePurple else HighContrastCard)
+                        .border(
+                            2.dp,
+                            if (isReadyToCapture) HighContrastWhite else HighContrastBorder,
+                            RoundedCornerShape(12.dp)
+                        )
+                        .clickable(enabled = isReadyToCapture) {
                             if (!hasCameraPermission) {
                                 permissionLauncher.launch(Manifest.permission.CAMERA)
                             } else {
@@ -273,8 +379,13 @@ fun EnrollPersonScreen(
                         }
                         .semantics {
                             role = Role.Button
-                            contentDescription = if (isNameValid) "Start face capture for ${personNameInput.trim()}" else "Enter a person name first"
-                        },
+                            contentDescription = when {
+                                !isNameValid -> "Start face capture disabled. Enter a person name first."
+                                !hasConsent -> "Start face capture disabled. Consent obtained must be checked."
+                                else -> "Start face capture for ${personNameInput.trim()}"
+                            }
+                        }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(
@@ -284,7 +395,7 @@ fun EnrollPersonScreen(
                         Text(
                             text = "START FACE CAPTURE",
                             style = MaterialTheme.typography.titleMedium,
-                            color = if (isNameValid) HighContrastWhite else HighContrastTextMuted,
+                            color = if (isReadyToCapture) HighContrastWhite else HighContrastTextMuted,
                             fontWeight = FontWeight.ExtraBold
                         )
                         Text(
@@ -312,7 +423,9 @@ fun EnrollPersonScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .padding(14.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     // Top Bar
@@ -323,10 +436,10 @@ fun EnrollPersonScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .height(50.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .defaultMinSize(minWidth = 80.dp, minHeight = 48.dp)
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(HighContrastBlack.copy(alpha = 0.85f))
-                                .border(2.dp, HighContrastYellow, RoundedCornerShape(12.dp))
+                                .border(2.dp, HighContrastYellow, RoundedCornerShape(10.dp))
                                 .clickable {
                                     cameraController.stopPersonEnrollment()
                                     cameraController.unbindCamera()
@@ -336,7 +449,7 @@ fun EnrollPersonScreen(
                                     role = Role.Button
                                     contentDescription = "Cancel enrollment"
                                 }
-                                .padding(horizontal = 14.dp),
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
@@ -352,32 +465,41 @@ fun EnrollPersonScreen(
                                 Text(
                                     text = "CANCEL",
                                     color = HighContrastYellow,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
                                 )
                             }
                         }
 
                         Box(
                             modifier = Modifier
-                                .height(50.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .defaultMinSize(minHeight = 48.dp)
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(HighContrastBlack.copy(alpha = 0.85f))
-                                .border(2.dp, PeoplePurple, RoundedCornerShape(12.dp))
-                                .padding(horizontal = 14.dp),
+                                .border(2.dp, PeoplePurple, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "ENROLLING: ${enrollmentState.personName.uppercase()}",
                                 color = HighContrastWhite,
-                                fontWeight = FontWeight.ExtraBold
+                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.labelLarge
                             )
                         }
                     }
 
-                    // Middle: Temporary Debug Diagnostics HUD
+                    VoiceControlButton(
+                        voiceController = voiceController,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Middle: Diagnostics HUD
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = HighContrastBlack.copy(alpha = 0.92f)),
+                        colors = CardDefaults.cardColors(
+                            containerColor = HighContrastBlack.copy(alpha = 0.92f)
+                        ),
                         shape = RoundedCornerShape(12.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, HighContrastCyan)
                     ) {
@@ -397,7 +519,7 @@ fun EnrollPersonScreen(
                                     modifier = Modifier.semantics { hideFromAccessibility() }
                                 )
                                 Text(
-                                    text = "ENROLLMENT DIAGNOSTICS (DEBUG ONLY)",
+                                    text = "ENROLLMENT DIAGNOSTICS (DEV)",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = HighContrastCyan,
                                     fontWeight = FontWeight.Bold
@@ -408,28 +530,13 @@ fun EnrollPersonScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "CAMERA: ${if (enrollmentState.diagnostics.isCameraConnected) "CONNECTED" else "NOT CONNECTED"}",
+                                    text = "CAMERA: ${if (enrollmentState.diagnostics.isCameraConnected) "CONNECTED" else "WAITING"}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (enrollmentState.diagnostics.isCameraConnected) ReadGreen else HighContrastYellow,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "FRAMES RECEIVED: ${enrollmentState.diagnostics.framesReceived}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = HighContrastWhite
-                                )
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "FACE DETECTIONS: ${enrollmentState.diagnostics.faceDetectionsCount}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = HighContrastWhite
-                                )
-                                Text(
-                                    text = "ACCEPTED SAMPLES: ${enrollmentState.diagnostics.acceptedSamples}/5",
+                                    text = "ACCEPTED: ${enrollmentState.diagnostics.acceptedSamples}/5",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (enrollmentState.diagnostics.acceptedSamples > 0) ReadGreen else HighContrastYellow,
                                     fontWeight = FontWeight.Bold
@@ -445,36 +552,26 @@ fun EnrollPersonScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (enrollmentState.diagnostics.lastRejectionReason.startsWith("NONE")) ReadGreen else HighContrastYellow
                             )
-                            enrollmentState.diagnostics.lastFaceMetrics?.let { metrics ->
-                                Text(
-                                    text = "METRICS: $metrics",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = HighContrastTextMuted
-                                )
-                            }
-                            enrollmentState.diagnostics.lastDetectorError?.let { err ->
-                                Text(
-                                    text = "DETECTOR ERROR: $err",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = androidx.compose.ui.graphics.Color(0xFFFF1744),
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
                         }
                     }
 
                     // Bottom Guidance HUD
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = HighContrastBlack.copy(alpha = 0.90f)),
-                        shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(2.dp, if (enrollmentState.isComplete) ReadGreen else HighContrastYellow)
+                        colors = CardDefaults.cardColors(
+                            containerColor = HighContrastBlack.copy(alpha = 0.92f)
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            2.dp,
+                            if (enrollmentState.isComplete) ReadGreen else HighContrastYellow
+                        )
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -508,7 +605,7 @@ fun EnrollPersonScreen(
                                 trackColor = HighContrastCard
                             )
 
-                            // Spoken / On-Screen Guidance Message
+                            // Guidance Message
                             Text(
                                 text = enrollmentState.guidanceMessage,
                                 style = MaterialTheme.typography.titleMedium,
@@ -523,8 +620,8 @@ fun EnrollPersonScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(54.dp)
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .defaultMinSize(minHeight = 52.dp)
+                                        .clip(RoundedCornerShape(10.dp))
                                         .background(ReadGreen)
                                         .clickable {
                                             cameraController.stopPersonEnrollment()
@@ -533,8 +630,9 @@ fun EnrollPersonScreen(
                                         }
                                         .semantics {
                                             role = Role.Button
-                                            contentDescription = "Finish enrollment and return to main screen"
-                                        },
+                                            contentDescription = "Done. Finish enrollment and return to main screen."
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(

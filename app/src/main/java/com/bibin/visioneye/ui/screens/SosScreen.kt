@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -31,6 +34,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +59,8 @@ import androidx.core.content.ContextCompat
 import com.bibin.visioneye.emergency.EmergencyContact
 import com.bibin.visioneye.emergency.EmergencyController
 import com.bibin.visioneye.emergency.EmergencyState
+import com.bibin.visioneye.ui.components.VisionHeader
+import com.bibin.visioneye.ui.components.VoiceControlButton
 import com.bibin.visioneye.ui.theme.EmergencyRed
 import com.bibin.visioneye.ui.theme.HighContrastBlack
 import com.bibin.visioneye.ui.theme.HighContrastBorder
@@ -64,6 +70,11 @@ import com.bibin.visioneye.ui.theme.HighContrastSurface
 import com.bibin.visioneye.ui.theme.HighContrastTextMuted
 import com.bibin.visioneye.ui.theme.HighContrastWhite
 import com.bibin.visioneye.ui.theme.HighContrastYellow
+import com.bibin.visioneye.voice.DictationFieldType
+import com.bibin.visioneye.voice.ScreenVoiceActions
+import com.bibin.visioneye.voice.VoiceActionResult
+import com.bibin.visioneye.voice.VoiceController
+import com.bibin.visioneye.voice.VoiceScreenContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -85,6 +96,7 @@ import java.util.Locale
 fun SosScreen(
     emergencyController: EmergencyController,
     onExitSos: () -> Unit,
+    voiceController: VoiceController? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -112,6 +124,54 @@ fun SosScreen(
         hasSmsPermission = granted
     }
 
+    DisposableEffect(isEditingContact, contactNameInput, contactPhoneInput, emergencyState, voiceController) {
+        if (voiceController != null) {
+            voiceController.setScreenContext(VoiceScreenContext.SOS_EMERGENCY)
+            voiceController.setDictationConsumer { fieldType, text ->
+                when (fieldType) {
+                    DictationFieldType.EMERGENCY_CONTACT_NAME -> {
+                        val clean = text.trim()
+                        contactNameInput = clean
+                        VoiceActionResult.Success("Contact name set to $clean.")
+                    }
+                    DictationFieldType.EMERGENCY_CONTACT_PHONE -> {
+                        val normalized = ScreenVoiceActions.normalizeSpokenPhoneNumber(text)
+                        contactPhoneInput = normalized
+                        VoiceActionResult.Success("Phone number set to $normalized.")
+                    }
+                    else -> VoiceActionResult.Error("Unsupported field")
+                }
+            }
+
+            val actions = ScreenVoiceActions.createSosActions(
+                emergencyController = emergencyController,
+                onExitSos = {
+                    emergencyController.deactivate()
+                    onExitSos()
+                },
+                getIsEditingContact = { isEditingContact },
+                setIsEditingContact = { isEditingContact = it },
+                getContactNameInput = { contactNameInput },
+                setContactNameInput = { contactNameInput = it },
+                getContactPhoneInput = { contactPhoneInput },
+                setContactPhoneInput = { contactPhoneInput = it },
+                onSaveContact = {
+                    val trimmedName = contactNameInput.trim()
+                    val trimmedPhone = contactPhoneInput.trim()
+                    val newContact = EmergencyContact(trimmedName, trimmedPhone)
+                    emergencyController.contactRepository.saveContact(newContact)
+                    contact = newContact
+                    contactError = null
+                }
+            )
+            voiceController.registry.registerAll(actions)
+        }
+        onDispose {
+            voiceController?.registry?.unregisterForContext(VoiceScreenContext.SOS_EMERGENCY)
+            voiceController?.setDictationConsumer(null)
+        }
+    }
+
     BackHandler {
         emergencyController.deactivate()
         onExitSos()
@@ -124,50 +184,30 @@ fun SosScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 20.dp)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "EMERGENCY SOS",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = EmergencyRed,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 2.sp,
-                        modifier = Modifier.semantics {
-                            contentDescription = "Emergency SOS Screen"
-                        }
-                    )
-                    Text(
-                        text = "Assistance & Location Dispatch",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = HighContrastTextMuted
-                    )
-                }
+            // Header with Back Button
+            VisionHeader(
+                title = "EMERGENCY SOS",
+                subtitle = "Assistance & Location Dispatch",
+                onBack = {
+                    emergencyController.deactivate()
+                    onExitSos()
+                },
+                backLabel = "Return to main menu",
+                badgeText = "SOS",
+                badgeColor = EmergencyRed
+            )
 
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(EmergencyRed.copy(alpha = 0.2f))
-                        .border(2.dp, EmergencyRed, RoundedCornerShape(22.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "🚨",
-                        fontSize = 22.sp,
-                        modifier = Modifier.semantics { hideFromAccessibility() }
-                    )
-                }
-            }
+            VoiceControlButton(
+                voiceController = voiceController,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             // SMS Permission Banner if missing
             if (!hasSmsPermission) {
@@ -187,7 +227,7 @@ fun SosScreen(
                         ) {
                             Text(
                                 text = "⚠️",
-                                style = MaterialTheme.typography.titleSmall,
+                                fontSize = 16.sp,
                                 modifier = Modifier.semantics { hideFromAccessibility() }
                             )
                             Text(
@@ -205,21 +245,22 @@ fun SosScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .defaultMinSize(minHeight = 48.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(HighContrastYellow)
                                 .clickable { smsPermissionLauncher.launch(Manifest.permission.SEND_SMS) }
                                 .semantics {
                                     role = Role.Button
                                     contentDescription = "Grant SMS Permission"
-                                },
+                                }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "GRANT PERMISSION",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = HighContrastBlack,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.ExtraBold
                             )
                         }
                     }
@@ -231,12 +272,12 @@ fun SosScreen(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = HighContrastCard),
                 border = BorderStroke(1.dp, HighContrastBorder),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(
@@ -254,8 +295,9 @@ fun SosScreen(
                         if (!isEditingContact && contact != null) {
                             Box(
                                 modifier = Modifier
+                                    .defaultMinSize(minHeight = 44.dp)
                                     .clip(RoundedCornerShape(6.dp))
-                                    .border(1.dp, HighContrastCyan, RoundedCornerShape(6.dp))
+                                    .border(1.5.dp, HighContrastCyan, RoundedCornerShape(6.dp))
                                     .clickable {
                                         contactNameInput = contact?.name ?: ""
                                         contactPhoneInput = contact?.phoneNumber ?: ""
@@ -265,7 +307,8 @@ fun SosScreen(
                                         role = Role.Button
                                         contentDescription = "Edit emergency contact"
                                     }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = "EDIT",
@@ -320,8 +363,8 @@ fun SosScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .defaultMinSize(minHeight = 48.dp)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(HighContrastYellow)
                                 .clickable {
                                     val trimmedName = contactNameInput.trim()
@@ -341,7 +384,8 @@ fun SosScreen(
                                 .semantics {
                                     role = Role.Button
                                     contentDescription = "Save emergency contact"
-                                },
+                                }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -359,12 +403,12 @@ fun SosScreen(
                             ) {
                                 Text(
                                     text = "👤",
-                                    fontSize = 20.sp,
+                                    fontSize = 18.sp,
                                     modifier = Modifier.semantics { hideFromAccessibility() }
                                 )
                                 Text(
                                     text = contact?.name ?: "",
-                                    style = MaterialTheme.typography.titleLarge,
+                                    style = MaterialTheme.typography.titleMedium,
                                     color = HighContrastWhite,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -375,7 +419,7 @@ fun SosScreen(
                             ) {
                                 Text(
                                     text = "📞",
-                                    fontSize = 18.sp,
+                                    fontSize = 16.sp,
                                     modifier = Modifier.semantics { hideFromAccessibility() }
                                 )
                                 Text(
@@ -416,18 +460,18 @@ fun SosScreen(
                     is EmergencyState.Failed -> EmergencyRed
                     else -> HighContrastBorder
                 }),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(14.dp)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
                         text = "STATUS",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.labelMedium,
                         color = HighContrastTextMuted,
                         letterSpacing = 1.sp
                     )
@@ -436,13 +480,13 @@ fun SosScreen(
                         is EmergencyState.Idle -> {
                             Text(
                                 text = "READY",
-                                style = MaterialTheme.typography.headlineMedium,
+                                style = MaterialTheme.typography.headlineSmall,
                                 color = HighContrastWhite,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
                                 text = "Tap the button below to initiate emergency assistance countdown.",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = HighContrastTextMuted,
                                 textAlign = TextAlign.Center
                             )
@@ -456,7 +500,7 @@ fun SosScreen(
                             )
                             Text(
                                 text = "Sending emergency message in ${s.secondsRemaining} seconds...\nTap CANCEL SOS to abort.",
-                                style = MaterialTheme.typography.bodyLarge,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = HighContrastWhite,
                                 textAlign = TextAlign.Center,
                                 fontWeight = FontWeight.Medium
@@ -465,13 +509,13 @@ fun SosScreen(
                         is EmergencyState.AcquiringLocation -> {
                             Text(
                                 text = "ACQUIRING GPS...",
-                                style = MaterialTheme.typography.headlineMedium,
+                                style = MaterialTheme.typography.titleLarge,
                                 color = HighContrastCyan,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
                                 text = "Determining device coordinates before sending...",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = HighContrastTextMuted,
                                 textAlign = TextAlign.Center
                             )
@@ -479,13 +523,13 @@ fun SosScreen(
                         is EmergencyState.Sending -> {
                             Text(
                                 text = "SENDING SOS...",
-                                style = MaterialTheme.typography.headlineMedium,
+                                style = MaterialTheme.typography.titleLarge,
                                 color = HighContrastCyan,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
                                 text = "Dispatching emergency SMS via telephony...",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = HighContrastTextMuted,
                                 textAlign = TextAlign.Center
                             )
@@ -493,13 +537,13 @@ fun SosScreen(
                         is EmergencyState.Sent -> {
                             Text(
                                 text = "SOS SENT",
-                                style = MaterialTheme.typography.headlineMedium,
+                                style = MaterialTheme.typography.titleLarge,
                                 color = Color(0xFF00E676),
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
                                 text = "Emergency message submitted to ${s.recipient}.\nSent at ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(s.timestampMs))}",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = HighContrastWhite,
                                 textAlign = TextAlign.Center
                             )
@@ -507,13 +551,13 @@ fun SosScreen(
                         is EmergencyState.Failed -> {
                             Text(
                                 text = "SOS FAILED",
-                                style = MaterialTheme.typography.headlineMedium,
+                                style = MaterialTheme.typography.titleLarge,
                                 color = EmergencyRed,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
                                 text = s.reason,
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = HighContrastWhite,
                                 textAlign = TextAlign.Center
                             )
@@ -521,13 +565,13 @@ fun SosScreen(
                         is EmergencyState.Cancelled -> {
                             Text(
                                 text = "SOS CANCELLED",
-                                style = MaterialTheme.typography.headlineMedium,
+                                style = MaterialTheme.typography.titleLarge,
                                 color = HighContrastYellow,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
                                 text = "Emergency dispatch was aborted.",
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = HighContrastTextMuted,
                                 textAlign = TextAlign.Center
                             )
@@ -543,24 +587,25 @@ fun SosScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(84.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                            .defaultMinSize(minHeight = 72.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(HighContrastWhite)
-                            .border(3.dp, EmergencyRed, RoundedCornerShape(16.dp))
+                            .border(3.dp, EmergencyRed, RoundedCornerShape(14.dp))
                             .clickable { emergencyController.cancelSos() }
                             .semantics {
                                 role = Role.Button
                                 contentDescription = "Cancel SOS countdown"
-                            },
+                            }
+                            .padding(14.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
                                 text = "🛑",
-                                fontSize = 32.sp,
+                                fontSize = 28.sp,
                                 modifier = Modifier.semantics { hideFromAccessibility() }
                             )
                             Text(
@@ -577,15 +622,16 @@ fun SosScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(84.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                            .defaultMinSize(minHeight = 64.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(HighContrastCard)
-                            .border(2.dp, HighContrastBorder, RoundedCornerShape(16.dp))
+                            .border(2.dp, HighContrastBorder, RoundedCornerShape(14.dp))
                             .clickable { emergencyController.cancelSos() }
                             .semantics {
                                 role = Role.Button
                                 contentDescription = "Cancel sending SOS"
-                            },
+                            }
+                            .padding(14.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -597,33 +643,34 @@ fun SosScreen(
                     }
                 }
                 else -> {
-                    // Ready / Idle / Sent / Failed / Cancelled -> Large Trigger Button
+                    // Large Trigger Button
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(84.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                            .defaultMinSize(minHeight = 72.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(EmergencyRed)
-                            .border(3.dp, HighContrastWhite, RoundedCornerShape(16.dp))
+                            .border(3.dp, HighContrastWhite, RoundedCornerShape(14.dp))
                             .clickable { emergencyController.triggerSos() }
                             .semantics {
                                 role = Role.Button
                                 contentDescription = "Trigger Emergency SOS. Starts a 3 second countdown before dispatching your location to your contact."
-                            },
+                            }
+                            .padding(14.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
                                 text = "🚨",
-                                fontSize = 32.sp,
+                                fontSize = 28.sp,
                                 modifier = Modifier.semantics { hideFromAccessibility() }
                             )
                             Text(
                                 text = "TRIGGER SOS",
-                                style = MaterialTheme.typography.headlineSmall,
+                                style = MaterialTheme.typography.titleLarge,
                                 color = HighContrastWhite,
                                 fontWeight = FontWeight.ExtraBold
                             )
@@ -636,10 +683,10 @@ fun SosScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .defaultMinSize(minHeight = 52.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(HighContrastCard)
-                    .border(1.dp, HighContrastBorder, RoundedCornerShape(12.dp))
+                    .border(1.dp, HighContrastBorder, RoundedCornerShape(10.dp))
                     .clickable {
                         emergencyController.deactivate()
                         onExitSos()
@@ -647,7 +694,8 @@ fun SosScreen(
                     .semantics {
                         role = Role.Button
                         contentDescription = "Return to Main Menu"
-                    },
+                    }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
@@ -655,21 +703,21 @@ fun SosScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "←",
-                        fontSize = 18.sp,
+                        text = "◀",
+                        fontSize = 16.sp,
                         color = HighContrastWhite,
                         modifier = Modifier.semantics { hideFromAccessibility() }
                     )
                     Text(
                         text = "RETURN TO MAIN MENU",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         color = HighContrastWhite,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }

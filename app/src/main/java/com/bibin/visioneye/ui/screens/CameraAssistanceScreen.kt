@@ -10,14 +10,19 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import com.bibin.visioneye.ui.components.VoiceControlButton
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -95,6 +100,7 @@ fun CameraAssistanceScreen(
     currentMode: VisionMode,
     cameraController: CameraController,
     onStopCamera: () -> Unit,
+    voiceController: com.bibin.visioneye.voice.VoiceController? = null,
     modifier: Modifier = Modifier
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -107,6 +113,33 @@ fun CameraAssistanceScreen(
 
     var showDebugOverlay by remember {
         mutableStateOf(true) // Development-only bounding-box overlay active in dev
+    }
+
+    DisposableEffect(currentMode, showDebugOverlay, voiceController) {
+        val screenContext = when (currentMode) {
+            VisionMode.NAVIGATE -> com.bibin.visioneye.voice.VoiceScreenContext.CAMERA_NAVIGATE
+            VisionMode.READ -> com.bibin.visioneye.voice.VoiceScreenContext.CAMERA_READ
+            VisionMode.CURRENCY -> com.bibin.visioneye.voice.VoiceScreenContext.CAMERA_CURRENCY
+            VisionMode.PEOPLE -> com.bibin.visioneye.voice.VoiceScreenContext.CAMERA_PEOPLE
+            else -> com.bibin.visioneye.voice.VoiceScreenContext.CAMERA_NAVIGATE
+        }
+        if (voiceController != null) {
+            voiceController.setScreenContext(screenContext)
+            val actions = com.bibin.visioneye.voice.ScreenVoiceActions.createCameraAssistanceActions(
+                currentMode = currentMode,
+                cameraController = cameraController,
+                onStopCamera = {
+                    cameraController.stopCamera()
+                    onStopCamera()
+                },
+                getShowDebugOverlay = { showDebugOverlay },
+                onToggleOverlay = { showDebugOverlay = !showDebugOverlay }
+            )
+            voiceController.registry.registerAll(actions)
+        }
+        onDispose {
+            voiceController?.registry?.unregisterForContext(screenContext)
+        }
     }
 
     var hasCameraPermission by remember {
@@ -197,36 +230,77 @@ fun CameraAssistanceScreen(
                 }
 
                 // 3. High-Contrast Overlay HUD
-                Column(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .padding(14.dp)
                 ) {
-                    // Top Bar: Back/Stop button and Mode/State indicator
-                    TopBarControls(
-                        currentMode = currentMode,
-                        cameraState = cameraState,
-                        onStopCamera = {
-                            cameraController.stopCamera()
-                            onStopCamera()
-                        }
-                    )
+                    val isSpaceConstrained = maxHeight < 520.dp
 
-                    // Bottom Bar: Status information, diagnostics, and YOLO dev status
-                    BottomStatusOverlay(
-                        currentMode = currentMode,
-                        cameraState = cameraState,
-                        diagnostics = diagnostics,
-                        yoloState = yoloState,
-                        readState = readState,
-                        peopleState = peopleState,
-                        currencyState = currencyState,
-                        showDebugOverlay = showDebugOverlay,
-                        onToggleOverlay = { showDebugOverlay = !showDebugOverlay },
-                        onScanAgain = { cameraController.scanAgain() },
-                        onCapturePageNow = { cameraController.capturePageNow() }
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Top Bar: Back/Stop button and Mode/State indicator
+                        TopBarControls(
+                            currentMode = currentMode,
+                            cameraState = cameraState,
+                            onStopCamera = {
+                                cameraController.stopCamera()
+                                onStopCamera()
+                            }
+                        )
+
+                        // Bottom Group: Floating Voice Button (lower-right) immediately above BottomStatusOverlay
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            if (voiceController != null && !isSpaceConstrained) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.CenterEnd
+                                ) {
+                                    VoiceControlButton(
+                                        voiceController = voiceController,
+                                        isCompact = true
+                                    )
+                                }
+                            }
+
+                            // Bottom Bar: Status information, diagnostics, and YOLO dev status
+                            BottomStatusOverlay(
+                                currentMode = currentMode,
+                                cameraState = cameraState,
+                                diagnostics = diagnostics,
+                                yoloState = yoloState,
+                                readState = readState,
+                                peopleState = peopleState,
+                                currencyState = currencyState,
+                                showDebugOverlay = showDebugOverlay,
+                                onToggleOverlay = { showDebugOverlay = !showDebugOverlay },
+                                onScanAgain = { cameraController.scanAgain() },
+                                onCapturePageNow = { cameraController.capturePageNow() }
+                            )
+                        }
+                    }
+
+                    // Fallback corner for constrained vertical layouts (e.g. landscape or small displays)
+                    // Placed below Mode Badge at TopEnd, avoiding stop camera button and camera center
+                    if (voiceController != null && isSpaceConstrained) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 64.dp)
+                        ) {
+                            VoiceControlButton(
+                                voiceController = voiceController,
+                                isCompact = true
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -250,7 +324,7 @@ private fun TopBarControls(
         // Stop / Back Action Button
         Box(
             modifier = Modifier
-                .height(54.dp)
+                .defaultMinSize(minHeight = 48.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(HighContrastBlack.copy(alpha = 0.85f))
                 .border(2.dp, HighContrastYellow, RoundedCornerShape(12.dp))
@@ -259,7 +333,7 @@ private fun TopBarControls(
                     role = Role.Button
                     contentDescription = "Stop camera assistance and return to mode selection"
                 }
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 14.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
@@ -270,14 +344,14 @@ private fun TopBarControls(
                     text = "◀",
                     color = HighContrastYellow,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
+                    fontSize = 16.sp,
                     modifier = Modifier.semantics { hideFromAccessibility() }
                 )
                 Text(
                     text = "STOP CAMERA",
                     color = HighContrastYellow,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 15.sp
                 )
             }
         }
@@ -292,11 +366,11 @@ private fun TopBarControls(
 
         Box(
             modifier = Modifier
-                .height(54.dp)
+                .defaultMinSize(minHeight = 48.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(HighContrastBlack.copy(alpha = 0.85f))
                 .border(2.dp, badgeBorderColor, RoundedCornerShape(12.dp))
-                .padding(horizontal = 14.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
@@ -449,6 +523,7 @@ private fun BottomStatusOverlay(
                                         if (yoloState.isReady) {
                                             Box(
                                                 modifier = Modifier
+                                                    .defaultMinSize(minHeight = 44.dp)
                                                     .clip(RoundedCornerShape(6.dp))
                                                     .background(if (showDebugOverlay) HighContrastYellow else HighContrastSurface)
                                                     .border(1.dp, HighContrastBorder, RoundedCornerShape(6.dp))
@@ -457,7 +532,8 @@ private fun BottomStatusOverlay(
                                                         role = Role.Button
                                                         contentDescription = "Toggle detection bounding boxes. Currently ${if (showDebugOverlay) "on" else "off"}"
                                                     }
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                                contentAlignment = Alignment.Center
                                             ) {
                                                 Text(
                                                     text = if (showDebugOverlay) "BOXES: ON" else "BOXES: OFF",
@@ -677,14 +753,15 @@ private fun BottomStatusOverlay(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(52.dp)
+                                            .defaultMinSize(minHeight = 50.dp)
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(HighContrastYellow)
                                             .clickable(onClick = onCapturePageNow)
                                             .semantics {
                                                 role = Role.Button
                                                 contentDescription = "capture page now"
-                                            },
+                                            }
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
@@ -708,14 +785,15 @@ private fun BottomStatusOverlay(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(50.dp)
+                                            .defaultMinSize(minHeight = 50.dp)
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(ReadGreen)
                                             .clickable(onClick = onScanAgain)
                                             .semantics {
                                                 role = Role.Button
                                                 contentDescription = retryLabel.lowercase()
-                                            },
+                                            }
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
@@ -937,7 +1015,9 @@ private fun CameraPermissionPrompt(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -982,14 +1062,15 @@ private fun CameraPermissionPrompt(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(60.dp)
+                        .defaultMinSize(minHeight = 54.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(HighContrastYellow)
                         .clickable(onClick = onRequestPermission)
                         .semantics {
                             role = Role.Button
                             contentDescription = "Grant camera permission"
-                        },
+                        }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -1004,7 +1085,7 @@ private fun CameraPermissionPrompt(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .defaultMinSize(minHeight = 48.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(HighContrastCard)
                         .border(1.dp, HighContrastBorder, RoundedCornerShape(12.dp))
@@ -1012,7 +1093,8 @@ private fun CameraPermissionPrompt(
                         .semantics {
                             role = Role.Button
                             contentDescription = "Cancel and return to mode selection"
-                        },
+                        }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(

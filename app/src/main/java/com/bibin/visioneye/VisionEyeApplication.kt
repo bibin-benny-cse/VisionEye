@@ -31,6 +31,9 @@ class VisionEyeApplication : Application() {
     lateinit var emergencyController: com.bibin.visioneye.emergency.EmergencyController
         private set
 
+    lateinit var voiceController: com.bibin.visioneye.voice.VoiceController
+        private set
+
     val emergencyContactRepository: com.bibin.visioneye.emergency.EmergencyContactRepository by lazy {
         com.bibin.visioneye.emergency.SharedPreferencesEmergencyContactRepository(this)
     }
@@ -116,6 +119,12 @@ class VisionEyeApplication : Application() {
 
         // Register emergency controller to mode transitions for automatic SOS activation/deactivation
         mm.addListener(ec)
+
+        val vc = com.bibin.visioneye.voice.DefaultVoiceController(
+            context = this,
+            speechController = sc
+        )
+        voiceController = vc
     }
 
     companion object {

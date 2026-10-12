@@ -3,24 +3,28 @@ package com.bibin.visioneye.ui
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import com.bibin.visioneye.VisionEyeApplication
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         val app = application as VisionEyeApplication
         val modeManager = app.modeManager
         val cameraController = app.cameraController
         val navigationController = app.navigationController
         val emergencyController = app.emergencyController
+        val voiceController = app.voiceController
 
         setContent {
             VisionEyeApp(
                 modeManager = modeManager,
                 cameraController = cameraController,
                 navigationController = navigationController,
-                emergencyController = emergencyController
+                emergencyController = emergencyController,
+                voiceController = voiceController
             )
         }
     }

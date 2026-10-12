@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,11 +45,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bibin.visioneye.people.PeopleRepository
 import com.bibin.visioneye.people.SavedPerson
+import com.bibin.visioneye.ui.components.VisionHeader
+import com.bibin.visioneye.ui.components.VisionSectionTitle
 import com.bibin.visioneye.ui.theme.EmergencyRed
 import com.bibin.visioneye.ui.theme.HighContrastBlack
 import com.bibin.visioneye.ui.theme.HighContrastBorder
 import com.bibin.visioneye.ui.theme.HighContrastCard
-import com.bibin.visioneye.ui.theme.HighContrastCyan
 import com.bibin.visioneye.ui.theme.HighContrastSurface
 import com.bibin.visioneye.ui.theme.HighContrastTextMuted
 import com.bibin.visioneye.ui.theme.HighContrastWhite
@@ -57,7 +61,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Screen allowing visually impaired users and caregivers to review and delete saved people profiles.
+ * Accessible screen allowing visually impaired users and caregivers to review and delete saved people profiles.
  *
  * All stored profiles exist exclusively on the local device.
  */
@@ -66,12 +70,34 @@ fun ManagePeopleScreen(
     repository: PeopleRepository?,
     onBack: () -> Unit,
     onAddNewPerson: () -> Unit,
+    voiceController: com.bibin.visioneye.voice.VoiceController? = null,
     modifier: Modifier = Modifier
 ) {
     var peopleList by remember {
         mutableStateOf(repository?.getSavedPeople() ?: emptyList())
     }
     var personToDelete by remember { mutableStateOf<SavedPerson?>(null) }
+
+    androidx.compose.runtime.DisposableEffect(peopleList, personToDelete, voiceController) {
+        if (voiceController != null) {
+            voiceController.setScreenContext(com.bibin.visioneye.voice.VoiceScreenContext.MANAGE_PEOPLE)
+            val actions = com.bibin.visioneye.voice.ScreenVoiceActions.createManagePeopleActions(
+                repository = repository,
+                onBack = onBack,
+                onAddNewPerson = onAddNewPerson,
+                getPersonToDelete = { personToDelete },
+                setPersonToDelete = { personToDelete = it },
+                onConfirmDelete = { person ->
+                    repository?.deletePerson(person.id)
+                    peopleList = repository?.getSavedPeople() ?: emptyList()
+                }
+            )
+            voiceController.registry.registerAll(actions)
+        }
+        onDispose {
+            voiceController?.registry?.unregisterForContext(com.bibin.visioneye.voice.VoiceScreenContext.MANAGE_PEOPLE)
+        }
+    }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -80,67 +106,35 @@ fun ManagePeopleScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Top Bar
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .height(54.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(HighContrastCard)
-                        .border(2.dp, HighContrastYellow, RoundedCornerShape(12.dp))
-                        .clickable(onClick = onBack)
-                        .semantics {
-                            role = Role.Button
-                            contentDescription = "Back to main menu"
-                        }
-                        .padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "◀",
-                            color = HighContrastYellow,
-                            fontSize = 14.sp,
-                            modifier = Modifier.semantics { hideFromAccessibility() }
-                        )
-                        Text(
-                            text = "BACK",
-                            color = HighContrastYellow,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                    }
-                }
+            // Top Header with Back Button
+            VisionHeader(
+                title = "SAVED PEOPLE",
+                subtitle = "On-Device Face Directory",
+                onBack = onBack,
+                backLabel = "Back to main menu"
+            )
 
-                Text(
-                    text = "SAVED PEOPLE",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = HighContrastWhite,
-                    fontWeight = FontWeight.ExtraBold
-                )
+            // Persistent Accessible Voice Control Button
+            if (voiceController != null) {
+                com.bibin.visioneye.ui.components.VoiceControlButton(voiceController = voiceController)
             }
 
             // Privacy and Safety Notice
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = HighContrastCard),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.dp, PeoplePurple)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
+                        .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Row(
@@ -160,27 +154,27 @@ fun ManagePeopleScreen(
                         )
                     }
                     Text(
-                        text = "All face vectors and names are stored locally on this phone. No biometric data is ever sent to external cloud servers.",
+                        text = "All biometric vectors and names are stored locally on this phone. No biometric data is ever sent to external servers.",
                         style = MaterialTheme.typography.bodySmall,
                         color = HighContrastTextMuted
                     )
                 }
             }
 
-            // Add New Person Button
+            // Enroll New Person Button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
+                    .defaultMinSize(minHeight = 52.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(PeoplePurple)
                     .border(2.dp, HighContrastWhite, RoundedCornerShape(12.dp))
                     .clickable(onClick = onAddNewPerson)
                     .semantics {
                         role = Role.Button
-                        contentDescription = "Enroll new person. Opens camera to capture and save a new face"
+                        contentDescription = "Enroll new person. Opens camera to capture and save a new face."
                     }
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
@@ -215,11 +209,11 @@ fun ManagePeopleScreen(
                     ) {
                         Text(
                             text = "👥",
-                            fontSize = 48.sp,
+                            fontSize = 44.sp,
                             modifier = Modifier.semantics { hideFromAccessibility() }
                         )
                         Text(
-                            text = "No saved people yet.",
+                            text = "No saved people yet",
                             style = MaterialTheme.typography.titleMedium,
                             color = HighContrastWhite,
                             fontWeight = FontWeight.Bold
@@ -233,18 +227,16 @@ fun ManagePeopleScreen(
                     }
                 }
             } else {
-                Text(
-                    text = "ENROLLED PROFILES (${peopleList.size})",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = HighContrastYellow,
-                    fontWeight = FontWeight.Bold
+                VisionSectionTitle(
+                    title = "ENROLLED PROFILES (${peopleList.size})",
+                    color = HighContrastYellow
                 )
 
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(peopleList, key = { it.id }) { person ->
                         SavedPersonItem(
@@ -265,19 +257,20 @@ fun ManagePeopleScreen(
                     Text(
                         text = "DELETE \"${person.name.uppercase()}\"?",
                         color = EmergencyRed,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.ExtraBold
                     )
                 },
                 text = {
                     Text(
                         text = "Are you sure you want to remove ${person.name} from saved people? Their face recognition vector will be permanently deleted from this device.",
-                        color = HighContrastWhite
+                        color = HighContrastWhite,
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 },
                 confirmButton = {
                     Box(
                         modifier = Modifier
-                            .height(48.dp)
+                            .defaultMinSize(minWidth = 90.dp, minHeight = 48.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(EmergencyRed)
                             .clickable {
@@ -289,7 +282,7 @@ fun ManagePeopleScreen(
                                 role = Role.Button
                                 contentDescription = "Confirm deletion of ${person.name}"
                             }
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -302,7 +295,7 @@ fun ManagePeopleScreen(
                 dismissButton = {
                     Box(
                         modifier = Modifier
-                            .height(48.dp)
+                            .defaultMinSize(minWidth = 90.dp, minHeight = 48.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(HighContrastCard)
                             .border(1.dp, HighContrastBorder, RoundedCornerShape(8.dp))
@@ -311,7 +304,7 @@ fun ManagePeopleScreen(
                                 role = Role.Button
                                 contentDescription = "Cancel deletion"
                             }
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -340,18 +333,21 @@ private fun SavedPersonItem(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, HighContrastBorder, RoundedCornerShape(12.dp)),
+            .border(1.5.dp, HighContrastBorder, RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(containerColor = HighContrastCard),
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
                 Text(
                     text = person.name,
                     style = MaterialTheme.typography.titleLarge,
